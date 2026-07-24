@@ -102,7 +102,7 @@ public class JavaPlayerPositionTranslator extends PacketTranslator<ClientboundPl
             // Log out and back in - and you're looking elsewhere :)
             entity.updateOwnRotation(entity.getYaw(), entity.getPitch(), entity.getHeadYaw());
             session.setSpawned(true);
-            entity.sendPendingHeightOffsetNotice();
+            entity.schedulePendingHeightOffsetNotice();
             entity.sendMaximumHeightWarning(entity.bedrockPosition());
 
             // Make sure the player moves away from (0, 32767, 0) before accepting movement packets

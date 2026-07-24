@@ -54,6 +54,7 @@ import org.geysermc.geyser.level.block.type.TrapDoorBlock;
 import org.geysermc.geyser.session.GeyserSession;
 import org.geysermc.geyser.session.cache.TeleportCache;
 import org.geysermc.geyser.session.cache.tags.BlockTag;
+import org.geysermc.geyser.text.ChatColor;
 import org.geysermc.geyser.text.GeyserLocale;
 import org.geysermc.geyser.util.AttributeUtils;
 import org.geysermc.geyser.util.DimensionUtils;
@@ -75,6 +76,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The entity class specifically for a {@link GeyserSession}'s player.
@@ -110,14 +112,14 @@ public class SessionPlayerEntity extends PlayerEntity {
     private boolean sentMaximumHeightWarning;
 
     /**
-     * 确保每个会话只发送一次 Java 到 Bedrock 的高度映射提示喵~
-     */
-    private boolean sentHeightOffsetNotice;
-
-    /**
      * 在 Bedrock 客户端完成生成后需要显示的高度映射偏移量喵~
      */
     private @Nullable Integer pendingHeightOffsetNotice;
+
+    /**
+     * 用于令旧维度的延迟高度提示失效的递增编号喵~
+     */
+    private long heightOffsetNoticeGeneration;
     /**
      * Used when emulating client-side vehicles
      */
@@ -225,7 +227,8 @@ public class SessionPlayerEntity extends PlayerEntity {
         if (!sentMaximumHeightWarning && bedrockPosition.getY() >= 511) {
             // 喵~防御：用会话内标记阻止移动和传送反复触发最高高度提示喵~
             sentMaximumHeightWarning = true;
-            session.sendMessage(GeyserLocale.getPlayerLocaleString("geyser.chat.height_max_warning", session.locale()));
+            session.sendMessage(ChatColor.BOLD + ChatColor.RED
+                + GeyserLocale.getPlayerLocaleString("geyser.chat.height_max_warning", session.locale()) + ChatColor.RESET);
         }
     }
 
@@ -233,20 +236,30 @@ public class SessionPlayerEntity extends PlayerEntity {
      * 记录映射维度的偏移量，等待 Bedrock 客户端完成生成后再显示提示喵~
      */
     public void queueHeightOffsetNotice(@Nullable Integer offset) {
+        // 喵~防御：递增编号会让已排队的旧维度延迟任务失效，避免跨维度显示错误提示喵~
+        heightOffsetNoticeGeneration++;
         // 喵~防御：未映射维度清空待发送状态，防止旧维度的偏移提示延迟显示喵~
         pendingHeightOffsetNotice = offset;
     }
 
     /**
-     * 在 Bedrock 客户端完成生成后发送已排队的高度映射提示喵~
+     * 在 Bedrock 客户端完成生成十秒后发送当前维度的高度映射提示喵~
      */
-    public void sendPendingHeightOffsetNotice() {
-        if (!sentHeightOffsetNotice && pendingHeightOffsetNotice != null) {
-            // 喵~防御：仅在实际发送时消耗一次性标记，避免登录期丢包后永不重试喵~
-            sentHeightOffsetNotice = true;
-            session.sendMessage(GeyserLocale.getPlayerLocaleString("geyser.chat.height_offset_notice", session.locale(), pendingHeightOffsetNotice));
+    public void schedulePendingHeightOffsetNotice() {
+        if (pendingHeightOffsetNotice == null) {
+            return;
         }
-        pendingHeightOffsetNotice = null;
+
+        // 当前偏移量与编号会在延迟任务执行时复核，保证只显示仍然有效的维度信息喵~
+        int displayOffset = -pendingHeightOffsetNotice;
+        long scheduledGeneration = heightOffsetNoticeGeneration;
+        session.scheduleInEventLoop(() -> {
+            if (scheduledGeneration == heightOffsetNoticeGeneration && pendingHeightOffsetNotice != null) {
+                session.sendMessage(ChatColor.BOLD + ChatColor.YELLOW
+                    + GeyserLocale.getPlayerLocaleString("geyser.chat.height_offset_notice", session.locale(), displayOffset) + ChatColor.RESET);
+                pendingHeightOffsetNotice = null;
+            }
+        }, 10, TimeUnit.SECONDS);
     }
 
     @Override
