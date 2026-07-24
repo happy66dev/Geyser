@@ -39,7 +39,8 @@ public record PlaySoundEventTranslator(String name, float volume, boolean pitchS
         Random rand = ThreadLocalRandom.current();
         PlaySoundPacket playSoundPacket = new PlaySoundPacket();
         playSoundPacket.setSound(name);
-        playSoundPacket.setPosition(!relative ? session.getPlayerEntity().bedrockPosition() : packet.getPosition().toFloat().add(0.5f, 0.5f, 0.5f));
+        // 声音位置 Y 轴仅加 offset，不 clamp，允许声音超出维度高度喵~
+        playSoundPacket.setPosition(!relative ? session.getPlayerEntity().bedrockPosition() : session.mapPositionUnclamped(packet.getPosition().toFloat().add(0.5f, 0.5f, 0.5f)));
         playSoundPacket.setVolume(volume);
         playSoundPacket.setPitch((pitchSub ? (rand.nextFloat() - rand.nextFloat()) : rand.nextFloat()) * pitchMul + pitchAdd); //replicates java client randomness
         session.sendUpstreamPacket(playSoundPacket);

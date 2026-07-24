@@ -189,10 +189,11 @@ final class BedrockMovePlayer {
                     Packet movePacket;
                     if (rotationChanged) {
                         // Send rotation updates as well
+                        // Y 轴反向映射回 Java 真实高度后再发包给 Java 服务端喵~
                         movePacket = new ServerboundMovePlayerPosRotPacket(
                             isOnGround,
                             horizontalCollision,
-                            position.getX(), position.getY(), position.getZ(),
+                            position.getX(), session.inverseMapY(position.getY()), position.getZ(),
                             javaYaw, pitch
                         );
                         entity.setYaw(yaw);
@@ -201,7 +202,8 @@ final class BedrockMovePlayer {
                         entity.setHeadYaw(headYaw);
                     } else {
                         // Rotation did not change; don't send an update with rotation
-                        movePacket = new ServerboundMovePlayerPosPacket(isOnGround, horizontalCollision, position.getX(), position.getY(), position.getZ());
+                        // Y 轴反向映射回 Java 真实高度后再发包给 Java 服务端喵~
+                        movePacket = new ServerboundMovePlayerPosPacket(isOnGround, horizontalCollision, position.getX(), session.inverseMapY(position.getY()), position.getZ());
                     }
 
                     entity.setPositionFromBedrockPos(packet.getPosition());

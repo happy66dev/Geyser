@@ -109,7 +109,8 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
 
         // calculate the difference between the java dimension minY and the bedrock dimension minY as
         // the java chunk sections may need to be placed higher up in the bedrock chunk section array
-        int sectionCountDiff = yOffset - (bedrockDimension.minY() >> 4);
+        int mappingOffset = session.getWorldHeightMapper().offset();
+        int sectionCountDiff = yOffset + (mappingOffset >> 4) - (bedrockDimension.minY() >> 4);
         GeyserChunkSection[] sections = new GeyserChunkSection[chunkSize + sectionCountDiff];
 
         try {
@@ -121,7 +122,8 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                 javaBiomes[sectionY] = javaSection.getBiomeData();
 
                 int bedrockSectionY = sectionY + sectionCountDiff;
-                int subChunkIndex = sectionY + yOffset;
+                // 使用顶部已缓存的 mappingOffset，避免重复调用方法链喵~
+                int subChunkIndex = sectionY + yOffset + (mappingOffset >> 4);
                 if (bedrockSectionY < 0 || maxBedrockSectionY < bedrockSectionY) {
                     // Ignore this chunk section since it goes outside the bounds accepted by the Bedrock client
                     continue;
@@ -152,7 +154,7 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                         // Check if block is piston or flower to see if we'll need to create additional block entities, as they're only block entities in Bedrock
                         if (state.block() instanceof BedrockChunkWantsBlockEntityTag blockEntity) {
                             bedrockBlockEntities.add(blockEntity.createTag(session,
-                                    Vector3i.from((packet.getX() << 4) + (yzx & 0xF), ((sectionY + yOffset) << 4) + ((yzx >> 8) & 0xF), (packet.getZ() << 4) + ((yzx >> 4) & 0xF)),
+                                    Vector3i.from((packet.getX() << 4) + (yzx & 0xF), ((sectionY + yOffset) << 4) + ((yzx >> 8) & 0xF) + mappingOffset, (packet.getZ() << 4) + ((yzx >> 4) & 0xF)),
                                     state
                             ));
                         }
@@ -212,7 +214,7 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                         if (bedrockOnlyBlockEntityIds.get(paletteId)) {
                             BlockState state = BlockState.of(javaPalette.idToState(paletteId));
                             bedrockBlockEntities.add(((BedrockChunkWantsBlockEntityTag) state.block()).createTag(session,
-                                    Vector3i.from((packet.getX() << 4) + (yzx & 0xF), ((sectionY + yOffset) << 4) + ((yzx >> 8) & 0xF), (packet.getZ() << 4) + ((yzx >> 4) & 0xF)),
+                                    Vector3i.from((packet.getX() << 4) + (yzx & 0xF), ((sectionY + yOffset) << 4) + ((yzx >> 8) & 0xF) + mappingOffset, (packet.getZ() << 4) + ((yzx >> 4) & 0xF)),
                                     state
                             ));
                         }
@@ -289,15 +291,15 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                 // The Java server can send block entity data for blocks that aren't actually those blocks.
                 // A Java client ignores these
                 if (type == blockState.block().blockEntityType()) {
-                    bedrockBlockEntities.add(blockEntityTranslator.getBlockEntityTag(session, type, x + chunkBlockX, y, z + chunkBlockZ, tag, blockState));
+                    bedrockBlockEntities.add(blockEntityTranslator.getBlockEntityTag(session, type, x + chunkBlockX, y + mappingOffset, z + chunkBlockZ, tag, blockState));
 
                     // Check for custom skulls
                     if (session.getPreferencesCache().showCustomSkulls() && type == BlockEntityType.SKULL && tag != null && tag.containsKey("profile")) {
-                        BlockDefinition blockDefinition = SkullBlockEntityTranslator.translateSkull(session, tag, Vector3i.from(x + chunkBlockX, y, z + chunkBlockZ), blockState);
+                        BlockDefinition blockDefinition = SkullBlockEntityTranslator.translateSkull(session, tag, Vector3i.from(x + chunkBlockX, y + mappingOffset, z + chunkBlockZ), blockState);
                         if (blockDefinition != null) {
-                            int bedrockSectionY = (y >> 4) - (bedrockDimension.minY() >> 4);
-                            int subChunkIndex = (y >> 4) + (bedrockDimension.minY() >> 4);
-                            if (0 <= bedrockSectionY && bedrockSectionY < maxBedrockSectionY) {
+                            int bedrockSectionY = ((y + mappingOffset) >> 4) - (bedrockDimension.minY() >> 4);
+                            int subChunkIndex = (y + mappingOffset) >> 4;
+                            if (0 <= bedrockSectionY && bedrockSectionY <= maxBedrockSectionY) {
                                 // Custom skull is in a section accepted by Bedrock
                                 GeyserChunkSection bedrockSection = sections[bedrockSectionY];
                                 IntList palette = bedrockSection.getBlockStorageArray()[0].getPalette();
@@ -349,22 +351,28 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                 }
             }
 
-            int dimensionOffset = bedrockDimension.minY() >> 4;
-            for (int i = 0; i < biomeCount; i++) {
-                int biomeYOffset = dimensionOffset + i;
-                if (biomeYOffset < yOffset) {
-                    // Ignore this biome section since it goes below the height of the Java world
+            // Bedrock biome Section 的起点，单位：16 格 Section喵~
+            int bedrockBiomeSectionStart = bedrockDimension.minY() >> 4;
+            // Java Section 映射后的 Bedrock 起点，需与方块 subChunkIndex 的计算保持一致喵~
+            int mappedJavaSectionStart = yOffset + (mappingOffset >> 4);
+            for (int biomeSectionIndex = 0; biomeSectionIndex < biomeCount; biomeSectionIndex++) {
+                // 当前 Bedrock biome 对应的绝对 Section 坐标，单位：16 格 Section喵~
+                int bedrockBiomeSectionY = bedrockBiomeSectionStart + biomeSectionIndex;
+                // 将 Bedrock Section 坐标反向映射为 Java Chunk 内的 Section 数组索引喵~
+                int javaBiomeSectionIndex = bedrockBiomeSectionY - mappedJavaSectionStart;
+                if (javaBiomeSectionIndex < 0) {
+                    // 映射位置低于 Java 世界底部时发送空 biome 数据喵~
                     byteBuf.writeBytes(ChunkUtils.EMPTY_BIOME_DATA);
                     continue;
                 }
-                if (biomeYOffset >= (chunkSize + yOffset)) {
-                    // This biome section goes above the height of the Java world
-                    // The byte written here is a header that says to carry on the biome data from the previous chunk
+                if (javaBiomeSectionIndex >= chunkSize) {
+                    // 映射位置高于 Java 世界顶部时沿用前一个 biome 数据喵~
                     byteBuf.writeByte((127 << 1) | 1);
                     continue;
                 }
 
-                BiomeTranslator.toNewBedrockBiome(session, javaBiomes[i + (dimensionOffset - yOffset)]).writeToNetwork(byteBuf);
+                // 发送与当前 Bedrock Section 对齐的 Java biome 数据喵~
+                BiomeTranslator.toNewBedrockBiome(session, javaBiomes[javaBiomeSectionIndex]).writeToNetwork(byteBuf);
             }
 
             byteBuf.writeByte(0); // Border blocks - Edu edition only
@@ -381,6 +389,19 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
             levelChunkPacket.setChunkZ(packet.getZ());
             levelChunkPacket.setData(byteBuf.retainedSlice());
             levelChunkPacket.setDimension(session.getBedrockDimension().bedrockId());
+            // debugMode 下每种高度组合仅输出一次实际发往 Bedrock 的区块包数据喵~
+            if (session.getGeyser().config().debugMode()) {
+                BedrockDimension activeBedrockDimension = session.getBedrockDimension();
+                String heightDiagnosticKey = activeBedrockDimension.bedrockId() + ":" + activeBedrockDimension.minY() + ":"
+                    + activeBedrockDimension.maxY() + ":" + sectionCount + ":" + biomeCount;
+                if (session.getLoggedChunkHeightDiagnostics().add(heightDiagnosticKey)) {
+                    session.getGeyser().getLogger().info("[height-map] LevelChunkPacket: chunkX=" + packet.getX() + ", chunkZ=" + packet.getZ()
+                        + ", dimension=" + activeBedrockDimension.bedrockId() + ", declaredMinY=" + activeBedrockDimension.minY()
+                        + ", declaredMaxY=" + activeBedrockDimension.maxY() + ", configuredSections=" + (activeBedrockDimension.height() >> 4)
+                        + ", subChunksLength=" + sectionCount + ", biomeSections=" + biomeCount + ", firstSubChunkIndex="
+                        + (activeBedrockDimension.minY() >> 4) + ", lastSubChunkIndex=" + ((activeBedrockDimension.maxY() - 1) >> 4));
+                }
+            }
             session.sendUpstreamPacket(levelChunkPacket);
         } catch (IOException e) {
             session.getGeyser().getLogger().error("IO error while encoding chunk", e);

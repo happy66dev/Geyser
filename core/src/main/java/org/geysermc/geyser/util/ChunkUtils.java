@@ -38,6 +38,7 @@ import org.cloudburstmc.protocol.bedrock.packet.UpdateBlockPacket;
 import org.geysermc.geyser.entity.type.ItemFrameEntity;
 import org.geysermc.geyser.level.BedrockDimension;
 import org.geysermc.geyser.level.JavaDimension;
+import org.geysermc.geyser.level.WorldHeightMapper;
 import org.geysermc.geyser.level.block.Blocks;
 import org.geysermc.geyser.level.block.type.BlockState;
 import org.geysermc.geyser.level.chunk.BlockStorage;
@@ -57,7 +58,7 @@ public class ChunkUtils {
     public static final byte[] EMPTY_BIOME_DATA;
     public static final BlockStorage[] EMPTY_BLOCK_STORAGE;
     public static final int EMPTY_CHUNK_SECTION_SIZE;
-    private static final ConcurrentHashMap<Integer, byte[]> EMPTY_CHUNK_PAYLOAD_CACHE = new ConcurrentHashMap<>(3);
+    private static final ConcurrentHashMap<Integer, byte[]> EMPTY_CHUNK_PAYLOAD_CACHE = new ConcurrentHashMap<>(16);
 
     static {
         EMPTY_BLOCK_STORAGE = new BlockStorage[0];
@@ -162,6 +163,10 @@ public class ChunkUtils {
         BedrockDimension bedrockDimension = session.getBedrockDimension();
         int bedrockSubChunkCount = bedrockDimension.height() >> 4;
 
+        if (bedrockSubChunkCount < 1) {
+            bedrockSubChunkCount = 1;
+        }
+
         byte[] payload = EMPTY_CHUNK_PAYLOAD_CACHE.computeIfAbsent(bedrockSubChunkCount, subChunkCount -> {
             int biomeLength = EMPTY_BIOME_DATA.length;
             int totalLength = biomeLength + subChunkCount;
@@ -189,7 +194,7 @@ public class ChunkUtils {
         session.sendUpstreamPacket(data);
 
         if (forceUpdate) {
-            Vector3i pos = Vector3i.from(chunkX << 4, 80, chunkZ << 4);
+            Vector3i pos = Vector3i.from(chunkX << 4, session.getBedrockDimension().minY(), chunkZ << 4);
             UpdateBlockPacket blockPacket = new UpdateBlockPacket();
             blockPacket.setBlockPosition(pos);
             blockPacket.setDataLayer(0);
@@ -218,10 +223,22 @@ public class ChunkUtils {
         int height = dimension.height();
         int maxY = minY + height;
 
+        WorldHeightMapper mapper = WorldHeightMapper.create(dimension);
+        session.setWorldHeightMapper(mapper);
+
+        BedrockDimension defaultBedrockDimension = session.getBedrockDimension();
+        if (minY < defaultBedrockDimension.minY() || maxY > defaultBedrockDimension.maxY()) {
+            session.setBedrockDimension(mapper.createBedrockDimension(dimension.bedrockId()));
+        }
+
         BedrockDimension bedrockDimension = session.getBedrockDimension();
-        // Yell in the console if the world height is too height in the current scenario
-        // The constraints change depending on if the player is in the overworld or not, and if experimental height is enabled
-        // (Ignore this for the Nether. We can't change that at the moment without the workaround. :/ )
+        // debugMode 下使用 INFO 输出维度加载后的实际映射与区块高度配置喵~
+        if (session.getGeyser().config().debugMode()) {
+            session.getGeyser().getLogger().info("[height-map] active dimension: javaMinY=" + minY + ", javaMaxY=" + maxY
+                + ", mapperOffset=" + mapper.offset() + ", mapperNeedsMapping=" + mapper.needsMapping()
+                + ", bedrockMinY=" + bedrockDimension.minY() + ", bedrockMaxY=" + bedrockDimension.maxY()
+                + ", bedrockHeight=" + bedrockDimension.height() + ", sections=" + (bedrockDimension.height() >> 4));
+        }
         if (SHOW_CHUNK_HEIGHT_WARNING_LOGS && (minY < bedrockDimension.minY() || (bedrockDimension.doUpperHeightWarn() && maxY > bedrockDimension.maxY()))) {
             session.getGeyser().getLogger().warning(GeyserLocale.getLocaleStringLog("geyser.network.translator.chunk.out_of_bounds",
                     String.valueOf(bedrockDimension.minY()),

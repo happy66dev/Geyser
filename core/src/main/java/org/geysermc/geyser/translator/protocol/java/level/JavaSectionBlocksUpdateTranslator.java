@@ -63,15 +63,16 @@ public class JavaSectionBlocksUpdateTranslator extends PacketTranslator<Clientbo
         BitSet waterlogged = BlockRegistries.WATERLOGGED.get();
 
         UpdateSubChunkBlocksPacket updateSubChunkBlocksPacket = new UpdateSubChunkBlocksPacket();
-        updateSubChunkBlocksPacket.setPosition(Vector3i.from(
+        updateSubChunkBlocksPacket.setPosition(session.mapPosition(Vector3i.from(
             packet.getChunkX() << 4, packet.getChunkY() << 4, packet.getChunkZ() << 4
-        ));
+        )));
 
         for (BlockChangeEntry entry : packet.getEntries()) {
-            session.getWorldCache().removePrediction(entry.getPosition());
+            Vector3i bedrockPos = session.mapPosition(entry.getPosition());
+            session.getWorldCache().removePrediction(bedrockPos);
 
             // Hack to avoid looking up blockstates for the currently broken position each tick
-            if (clientBreakPos != null && Objects.equals(clientBreakPos, entry.getPosition())) {
+            if (clientBreakPos != null && Objects.equals(clientBreakPos, bedrockPos)) {
                 session.getBlockBreakHandler().setUpdatedServerBlockStateId(entry.getBlock());
             }
 
@@ -90,7 +91,7 @@ public class JavaSectionBlocksUpdateTranslator extends PacketTranslator<Clientbo
 
             BlockState blockState = BlockState.of(entry.getBlock());
             if (blockState.is(Blocks.AIR)) {
-                ItemFrameEntity itemFrameEntity = ItemFrameEntity.getItemFrameEntity(session, entry.getPosition());
+                ItemFrameEntity itemFrameEntity = ItemFrameEntity.getItemFrameEntity(session, bedrockPos);
                 if (itemFrameEntity != null) { // Item frame is still present and no block overrides that; refresh it
                     itemFrameEntity.updateBlock(true);
                     continue;
@@ -99,15 +100,15 @@ public class JavaSectionBlocksUpdateTranslator extends PacketTranslator<Clientbo
 
             // Some block may have special handling, keep it that way
             if (!(blockState.block().getClass().equals(Block.class))) {
-                blockState.block().updateBlock(session, blockState, entry.getPosition());
+                blockState.block().updateBlock(session, blockState, bedrockPos);
                 continue;
             }
 
             // Skull is gone
-            session.getSkullCache().removeSkull(entry.getPosition());
+            session.getSkullCache().removeSkull(bedrockPos);
 
             updateSubChunkBlocksPacket.getStandardBlocks().add(new org.cloudburstmc.protocol.bedrock.data.BlockChangeEntry(
-                entry.getPosition(),
+                bedrockPos,
                 session.getBlockMappings().getBedrockBlock(blockState),
                 FLAG_ALL,
                 -1,
@@ -117,7 +118,7 @@ public class JavaSectionBlocksUpdateTranslator extends PacketTranslator<Clientbo
             boolean isWaterlogged = waterlogged.get(entry.getBlock());
             if (palette == null || waterlogged.get(oldBlock) != isWaterlogged) {
                 updateSubChunkBlocksPacket.getExtraBlocks().add(new org.cloudburstmc.protocol.bedrock.data.BlockChangeEntry(
-                    entry.getPosition(),
+                    bedrockPos,
                     isWaterlogged ? session.getBlockMappings().getBedrockWater() : session.getBlockMappings().getBedrockAir(),
                     0,
                     -1,

@@ -56,6 +56,7 @@ public class BedrockDimension {
     private final int height;
     private final boolean doUpperHeightWarn;
     private final int bedrockId;
+    private final boolean custom;
 
     /**
      * @param minY The minimum height Bedrock Edition will accept.
@@ -64,10 +65,22 @@ public class BedrockDimension {
      * @param bedrockId the Bedrock dimension ID of this dimension.
      */
     public BedrockDimension(int minY, int height, boolean doUpperHeightWarn, int bedrockId) {
+        this(minY, height, doUpperHeightWarn, bedrockId, false);
+    }
+
+    /**
+     * @param minY The minimum height Bedrock Edition will accept.
+     * @param height The maximum chunk height Bedrock Edition will accept, from the lowest point to the highest.
+     * @param doUpperHeightWarn whether to warn in the console if the Java dimension height exceeds Bedrock's.
+     * @param bedrockId the Bedrock dimension ID of this dimension.
+     * @param custom whether this is a custom dimension for Y-coordinate mapping.
+     */
+    public BedrockDimension(int minY, int height, boolean doUpperHeightWarn, int bedrockId, boolean custom) {
         this.minY = minY;
         this.height = height;
         this.doUpperHeightWarn = doUpperHeightWarn;
         this.bedrockId = bedrockId;
+        this.custom = custom;
     }
 
     /**
@@ -103,6 +116,10 @@ public class BedrockDimension {
 
     public int bedrockId() {
         return bedrockId;
+    }
+
+    public boolean isCustom() {
+        return custom;
     }
 
 }

@@ -82,7 +82,8 @@ public class EntitySpawnContext {
     }
 
     public static EntitySpawnContext fromPacket(GeyserSession session, EntityTypeDefinition<?> definition, ClientboundAddEntityPacket packet) {
-        Vector3f position = Vector3f.from(packet.getX(), packet.getY(), packet.getZ());
+        // 实体生成位置 Y 轴仅加 offset，不 clamp，允许实体处于维度高度范围之外喵~
+        Vector3f position = Vector3f.from(packet.getX(), session.mapYUnclamped(packet.getY()), packet.getZ());
         Vector3f motion = packet.getMovement().toFloat();
         return new EntitySpawnContext(session, definition, packet.getEntityId(), packet.getUuid(), definition.defaultBedrockDefinition(),
             position, motion, packet.getYaw(), packet.getPitch(), packet.getHeadYaw(), null);

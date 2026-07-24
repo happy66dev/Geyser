@@ -112,9 +112,12 @@ public class PistonBaseBlockMixin {
             Vector3i position = geyser$fromBlockPos(blockPos);
             session.executeInEventLoop(() -> {
                 PistonCache pistonCache = session.getPistonCache();
-                PistonBlockEntity blockEntity = pistonCache.getPistons().computeIfAbsent(position, pos ->
-                    new PistonBlockEntity(session, position, orientation, sticky, !isExtending));
-                blockEntity.setAction(type, attachedBlocks);
+                Vector3i bedrockPosition = session.mapPosition(position);
+                Object2ObjectMap<Vector3i, org.geysermc.geyser.level.block.type.BlockState> bedrockAttachedBlocks = new Object2ObjectArrayMap<>();
+                attachedBlocks.forEach((attachedPosition, state) -> bedrockAttachedBlocks.put(session.mapPosition(attachedPosition), state));
+                PistonBlockEntity blockEntity = pistonCache.getPistons().computeIfAbsent(bedrockPosition, pos ->
+                    new PistonBlockEntity(session, bedrockPosition, orientation, sticky, !isExtending));
+                blockEntity.setAction(type, bedrockAttachedBlocks);
             });
         }
     }

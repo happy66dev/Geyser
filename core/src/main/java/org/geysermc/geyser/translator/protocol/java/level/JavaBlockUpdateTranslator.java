@@ -42,27 +42,29 @@ public class JavaBlockUpdateTranslator extends PacketTranslator<ClientboundBlock
 
     @Override
     public void translate(GeyserSession session, ClientboundBlockUpdatePacket packet) {
-        Vector3i pos = packet.getEntry().getPosition();
+        Vector3i javaPos = packet.getEntry().getPosition();
+        Vector3i pos = session.mapPosition(javaPos);
         WorldManager worldManager = session.getGeyser().getWorldManager();
         // Platforms where Geyser has direct server access don't allow us to detect actual block changes,
         // hence why those platforms deal with sounds for block placements differently
         boolean updatePlacement = !worldManager.hasOwnChunkCache() &&
-                !session.getErosionHandler().isActive() && worldManager.getBlockAt(session, pos) != packet.getEntry().getBlock();
-        session.getWorldCache().updateServerCorrectBlockState(pos, packet.getEntry().getBlock());
+                !session.getErosionHandler().isActive() && worldManager.getBlockAt(session, javaPos) != packet.getEntry().getBlock();
+        // 单方块确认同时保留 Java 与 Bedrock 坐标，防止 ChunkCache 和 prediction 使用错误坐标系喵~
+        session.getWorldCache().updateServerCorrectBlockState(javaPos, pos, packet.getEntry().getBlock());
         if (updatePlacement) {
-            this.checkPlaceSound(session, packet);
+            this.checkPlaceSound(session, packet, pos);
         }
-        this.checkInteract(session, packet);
+        this.checkInteract(session, packet, pos);
     }
 
-    private void checkPlaceSound(GeyserSession session, ClientboundBlockUpdatePacket packet) {
+    private void checkPlaceSound(GeyserSession session, ClientboundBlockUpdatePacket packet, Vector3i pos) {
         Vector3i lastPlacePos = session.getLastBlockPlacePosition();
         if (lastPlacePos == null) {
             return;
         }
-        if ((lastPlacePos.getX() != packet.getEntry().getPosition().getX()
-                || lastPlacePos.getY() != packet.getEntry().getPosition().getY()
-                || lastPlacePos.getZ() != packet.getEntry().getPosition().getZ())) {
+        if ((lastPlacePos.getX() != pos.getX()
+                || lastPlacePos.getY() != pos.getY()
+                || lastPlacePos.getZ() != pos.getZ())) {
             return;
         }
 
@@ -92,14 +94,14 @@ public class JavaBlockUpdateTranslator extends PacketTranslator<ClientboundBlock
         session.setLastBlockPlaced(null);
     }
 
-    private void checkInteract(GeyserSession session, ClientboundBlockUpdatePacket packet) {
+    private void checkInteract(GeyserSession session, ClientboundBlockUpdatePacket packet, Vector3i pos) {
         Vector3i lastInteractPos = session.getLastInteractionBlockPosition();
         if (lastInteractPos == null || !session.isInteracting()) {
             return;
         }
-        if ((lastInteractPos.getX() != packet.getEntry().getPosition().getX()
-                || lastInteractPos.getY() != packet.getEntry().getPosition().getY()
-                || lastInteractPos.getZ() != packet.getEntry().getPosition().getZ())) {
+        if ((lastInteractPos.getX() != pos.getX()
+                || lastInteractPos.getY() != pos.getY()
+                || lastInteractPos.getZ() != pos.getZ())) {
             return;
         }
         BlockState state = BlockState.of(packet.getEntry().getBlock());

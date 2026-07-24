@@ -224,7 +224,7 @@ public final class BlockUtils {
     }
 
     public static void restoreCorrectBlock(GeyserSession session, Vector3i blockPos, int slot) {
-        restoreCorrectBlockAndItem(session, blockPos, session.getGeyser().getWorldManager().blockAt(session, blockPos), slot);
+        restoreCorrectBlockAndItem(session, blockPos, session.getGeyser().getWorldManager().blockAt(session, session.inverseMapPosition(blockPos)), slot);
     }
 
     public static void restoreCorrectBlockAndItem(GeyserSession session, Vector3i vector, BlockState blockState, int slot) {

@@ -91,7 +91,7 @@ public abstract class WorldManager {
     public int[] getBlocksAt(GeyserSession session, BlockPositionIterator iter) {
         int[] blocks = new int[iter.getMaxIterations()];
         for (; iter.hasNext(); iter.next()) {
-            int networkId = this.getBlockAt(session, iter.getX(), iter.getY(), iter.getZ());
+            int networkId = this.getBlockAt(session, iter.getX(), session.inverseMapY(iter.getY()), iter.getZ());
             blocks[iter.getIteration()] = networkId;
         }
         return blocks;

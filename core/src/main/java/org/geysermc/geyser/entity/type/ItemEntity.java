@@ -119,7 +119,9 @@ public class ItemEntity extends ProjectileEntity {
         super.moveAbsoluteImmediate(position, 0, 0, 0, isOnGround, teleported);
         this.position = position;
 
-        waterLevel = session.getGeyser().getWorldManager().getBlockAtAsync(session, position.getFloorX(), position.getFloorY(), position.getFloorZ())
+        // 实体内部位置已映射到 Bedrock 坐标；异步查询 Java 世界前必须反向映射喵~
+        Vector3i javaPosition = session.inverseMapPosition(position.toInt());
+        waterLevel = session.getGeyser().getWorldManager().getBlockAtAsync(session, javaPosition.getX(), javaPosition.getY(), javaPosition.getZ())
                 .thenApply(BlockStateValues::getWaterLevel);
     }
 
@@ -136,8 +138,9 @@ public class ItemEntity extends ProjectileEntity {
     @Override
     protected float getDrag() {
         if (isOnGround()) {
-            Vector3i groundBlockPos = position.toInt().down(1);
-            BlockState blockState = session.getGeyser().getWorldManager().blockAt(session, groundBlockPos);
+            // 实体内部位置已映射到 Bedrock 坐标；地面方块查询必须使用 Java 坐标喵~
+            Vector3i javaGroundBlockPos = session.inverseMapPosition(position.toInt().down(1));
+            BlockState blockState = session.getGeyser().getWorldManager().blockAt(session, javaGroundBlockPos);
             return BlockStateValues.getSlipperiness(blockState) * 0.98f;
         }
         return 0.98f;

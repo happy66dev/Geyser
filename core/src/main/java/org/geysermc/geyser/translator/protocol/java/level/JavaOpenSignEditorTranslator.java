@@ -37,7 +37,7 @@ public class JavaOpenSignEditorTranslator extends PacketTranslator<ClientboundOp
     @Override
     public void translate(GeyserSession session, ClientboundOpenSignEditorPacket packet) {
         OpenSignPacket openSignPacket = new OpenSignPacket();
-        openSignPacket.setPosition(packet.getPosition());
+        openSignPacket.setPosition(session.mapPosition(packet.getPosition()));
         openSignPacket.setFrontSide(packet.isFrontText());
         session.sendUpstreamPacket(openSignPacket);
 

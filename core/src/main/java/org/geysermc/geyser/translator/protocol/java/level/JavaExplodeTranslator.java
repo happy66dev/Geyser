@@ -26,6 +26,7 @@
 package org.geysermc.geyser.translator.protocol.java.level;
 
 import org.cloudburstmc.math.vector.Vector3f;
+import org.cloudburstmc.math.vector.Vector3i;
 import org.cloudburstmc.nbt.NbtMap;
 import org.cloudburstmc.nbt.NbtMapBuilder;
 import org.cloudburstmc.protocol.bedrock.data.LevelEvent;
@@ -45,13 +46,14 @@ public class JavaExplodeTranslator extends PacketTranslator<ClientboundExplodePa
 
     @Override
     public void translate(GeyserSession session, ClientboundExplodePacket packet) {
-        Vector3f vector = packet.getCenter().toFloat();
+        Vector3i center = session.mapPosition(packet.getCenter().toInt());
+        Vector3f vector = center.toFloat();
         LevelEventGenericPacket levelEventPacket = new LevelEventGenericPacket();
         levelEventPacket.setType(LevelEvent.PARTICLE_BLOCK_EXPLOSION);
         NbtMapBuilder builder = NbtMap.builder();
-        builder.putFloat("originX", (float) packet.getCenter().getX());
-        builder.putFloat("originY", (float) packet.getCenter().getY());
-        builder.putFloat("originZ", (float) packet.getCenter().getZ());
+        builder.putFloat("originX", (float) center.getX());
+        builder.putFloat("originY", (float) center.getY());
+        builder.putFloat("originZ", (float) center.getZ());
 
         // As of Bedrock 1.21 - particles will only be created by the above packet if there are blocks to blow up?
         // Not sure if the packet does anything - sending it just in case, because BDS still sends it.

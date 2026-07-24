@@ -41,10 +41,12 @@ public class JavaMoveVehicleTranslator extends PacketTranslator<ClientboundMoveV
         if (entity == null) return;
 
         if (entity instanceof ClientVehicle clientVehicle) {
-            clientVehicle.getVehicleComponent().moveAbsolute(packet.getPosition());
+            // 载具移动位置 Y 轴仅加 offset，不 clamp，允许超出维度高度喵~
+            clientVehicle.getVehicleComponent().moveAbsolute(session.mapPositionUnclamped(packet.getPosition().toFloat()).toDouble());
         }
 
-        entity.moveAbsolute(packet.getPosition().toFloat(), packet.getYRot(), packet.getXRot(), false, true);
+        // 载具移动位置 Y 轴仅加 offset，不 clamp，允许超出维度高度喵~
+        entity.moveAbsolute(session.mapPositionUnclamped(packet.getPosition().toFloat()), packet.getYRot(), packet.getXRot(), false, true);
         // TODO send serverbound move vehicle packet
     }
 }

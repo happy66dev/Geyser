@@ -67,6 +67,6 @@ public class JavaPlayerLookAtTranslator extends PacketTranslator<ClientboundPlay
                 };
             }
         }
-        return Vector3f.from(packet.getX(), packet.getY(), packet.getZ());
+        return Vector3f.from(packet.getX(), session.mapY(packet.getY()), packet.getZ());
     }
 }

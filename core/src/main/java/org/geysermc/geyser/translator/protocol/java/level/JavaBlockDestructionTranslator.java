@@ -26,6 +26,7 @@
 package org.geysermc.geyser.translator.protocol.java.level;
 
 import it.unimi.dsi.fastutil.Pair;
+import org.cloudburstmc.math.vector.Vector3i;
 import org.cloudburstmc.protocol.bedrock.data.LevelEvent;
 import org.cloudburstmc.protocol.bedrock.packet.LevelEventPacket;
 import org.geysermc.geyser.session.GeyserSession;
@@ -40,19 +41,20 @@ public class JavaBlockDestructionTranslator extends PacketTranslator<Clientbound
 
     @Override
     public void translate(GeyserSession session, ClientboundBlockDestructionPacket packet) {
+        Vector3i position = session.mapPosition(packet.getPosition());
         if (packet.getStage() == BlockBreakStage.RESET) {
             // Invalidate the position now that it's not being broken anymore
-            session.getBlockBreakHandler().getDestructionStageCache().invalidate(packet.getPosition());
-            BlockUtils.sendBedrockStopBlockBreak(session, packet.getPosition().toFloat());
+            session.getBlockBreakHandler().getDestructionStageCache().invalidate(position);
+            BlockUtils.sendBedrockStopBlockBreak(session, position.toFloat());
             return;
         }
 
         // Bedrock wants a total destruction time, not a stage - so we estimate!
         LevelEventPacket levelEventPacket = new LevelEventPacket();
-        levelEventPacket.setPosition(packet.getPosition().toFloat());
+        levelEventPacket.setPosition(position.toFloat());
 
         // First: Check if we know when the last packet for this position was sent - we'll use that for our estimation
-        Pair<Long, BlockBreakStage> lastUpdate = session.getBlockBreakHandler().getDestructionStageCache().getIfPresent(packet.getPosition());
+        Pair<Long, BlockBreakStage> lastUpdate = session.getBlockBreakHandler().getDestructionStageCache().getIfPresent(position);
         if (lastUpdate == null) {
             levelEventPacket.setType(LevelEvent.BLOCK_START_BREAK);
             levelEventPacket.setData(65535 / 6000); // just a high value (5 mins), we'll update this once we get a new progress update
@@ -67,7 +69,7 @@ public class JavaBlockDestructionTranslator extends PacketTranslator<Clientbound
             levelEventPacket.setData(65535 / Math.max(remainingStages, 1) * Math.max(ticksPerStage, 1));
         }
 
-        session.getBlockBreakHandler().getDestructionStageCache().put(packet.getPosition(), Pair.of(session.getClientTicks(), packet.getStage()));
+        session.getBlockBreakHandler().getDestructionStageCache().put(position, Pair.of(session.getClientTicks(), packet.getStage()));
         session.sendUpstreamPacket(levelEventPacket);
     }
 }

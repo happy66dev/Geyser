@@ -26,6 +26,7 @@
 package org.geysermc.geyser.entity.type;
 
 import org.cloudburstmc.math.vector.Vector3f;
+import org.cloudburstmc.math.vector.Vector3i;
 import org.cloudburstmc.protocol.bedrock.data.LevelEvent;
 import org.cloudburstmc.protocol.bedrock.data.entity.EntityFlag;
 import org.cloudburstmc.protocol.bedrock.packet.LevelEventPacket;
@@ -168,7 +169,9 @@ public class ProjectileEntity extends Entity implements Tickable {
      * @return true if this entity is currently in water.
      */
     protected boolean isInWater() {
-        int block = session.getGeyser().getWorldManager().getBlockAt(session, position.toInt());
+        // 实体内部位置已映射到 Bedrock 坐标；查询 Java 世界前必须反向映射喵~
+        Vector3i javaPosition = session.inverseMapPosition(position.toInt());
+        int block = session.getGeyser().getWorldManager().getBlockAt(session, javaPosition);
         return BlockStateValues.getWaterLevel(block) != -1;
     }
 
@@ -201,7 +204,9 @@ public class ProjectileEntity extends Entity implements Tickable {
      * @return true if the entity was removed
      */
     public boolean removedInVoid() {
-        if (position.getY() < session.getDimensionType().minY() - 64) {
+        // 实体内部位置已映射到 Bedrock 坐标；虚空判断必须使用还原后的 Java Y 喵~
+        float javaY = session.inverseMapY(position.getY());
+        if (javaY < session.getDimensionType().minY() - 64) {
             session.getEntityCache().removeEntity(this);
             return true;
         }

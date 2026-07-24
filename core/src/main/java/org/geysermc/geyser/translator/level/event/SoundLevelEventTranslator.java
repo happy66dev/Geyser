@@ -38,7 +38,8 @@ public record SoundLevelEventTranslator(LevelEventType levelEventType,
         LevelEventPacket eventPacket = new LevelEventPacket();
         eventPacket.setType(levelEventType);
         eventPacket.setData(data);
-        eventPacket.setPosition(Vector3f.from(packet.getPosition().getX(), packet.getPosition().getY(), packet.getPosition().getZ()).add(0.5f, 0.5f, 0.5f));
+        // 声音关卡事件位置 Y 轴仅加 offset，不 clamp，允许声音超出维度高度喵~
+        eventPacket.setPosition(session.mapPositionUnclamped(Vector3f.from(packet.getPosition().getX(), packet.getPosition().getY(), packet.getPosition().getZ()).add(0.5f, 0.5f, 0.5f)));
         session.sendUpstreamPacket(eventPacket);
     }
 }

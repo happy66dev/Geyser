@@ -73,6 +73,7 @@ public class JavaAddEntityTranslator extends PacketTranslator<ClientboundAddEnti
             session.getPlayerEntity().setRemovedPlayerVehicleId(null);
         }
 
+        // 实体生成上下文，内部已对 Y 轴做 offset 映射喵~
         EntitySpawnContext context = EntitySpawnContext.fromPacket(session, definition, packet);
         if (type.is(EntityType.PLAYER)) {
             PlayerEntity entity;
@@ -89,6 +90,7 @@ public class JavaAddEntityTranslator extends PacketTranslator<ClientboundAddEnti
                 }
 
                 entity.setEntityId(packet.getEntityId());
+                // 从 context 取已映射的位置，避免重复 mapYUnclamped 喵~
                 entity.setPosition(context.position());
                 entity.setYaw(packet.getYaw());
                 entity.setPitch(packet.getPitch());

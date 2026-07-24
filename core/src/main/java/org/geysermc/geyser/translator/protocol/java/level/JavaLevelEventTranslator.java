@@ -83,7 +83,7 @@ public class JavaLevelEventTranslator extends PacketTranslator<ClientboundLevelE
             if (jukeboxSong == null) {
                 return;
             }
-            Vector3i origin = packet.getPosition();
+            Vector3i origin = session.mapPosition(packet.getPosition());
             Vector3f pos = Vector3f.from(origin.getX() + 0.5f, origin.getY() + 0.5f, origin.getZ() + 0.5f);
 
             // Prioritize level events because it makes parrots dance.
@@ -139,7 +139,7 @@ public class JavaLevelEventTranslator extends PacketTranslator<ClientboundLevelE
             return;
         }
 
-        Vector3i origin = packet.getPosition();
+        Vector3i origin = session.mapPosition(packet.getPosition());
         Vector3f pos = Vector3f.from(origin.getX() + 0.5f, origin.getY() + 0.5f, origin.getZ() + 0.5f);
 
         LevelEventPacket effectPacket = new LevelEventPacket();
@@ -335,9 +335,9 @@ public class JavaLevelEventTranslator extends PacketTranslator<ClientboundLevelE
                     levelEventPacket.setType(org.cloudburstmc.protocol.bedrock.data.LevelEvent.SCULK_CHARGE);
                     levelEventPacket.setTag(
                         NbtMap.builder()
-                            .putInt("x", packet.getPosition().getX())
-                            .putInt("y", packet.getPosition().getY())
-                            .putInt("z", packet.getPosition().getZ())
+                            .putInt("x", origin.getX())
+                            .putInt("y", origin.getY())
+                            .putInt("z", origin.getZ())
                             .putShort("charge", (short) eventData.getCharge())
                             .putShort("facing", encodeFacing(eventData.getBlockFaces())) // TODO check if this is actually correct
                             .build()
@@ -346,9 +346,9 @@ public class JavaLevelEventTranslator extends PacketTranslator<ClientboundLevelE
                     levelEventPacket.setType(org.cloudburstmc.protocol.bedrock.data.LevelEvent.SCULK_CHARGE_POP);
                     levelEventPacket.setTag(
                         NbtMap.builder()
-                            .putInt("x", packet.getPosition().getX())
-                            .putInt("y", packet.getPosition().getY())
-                            .putInt("z", packet.getPosition().getZ())
+                            .putInt("x", origin.getX())
+                            .putInt("y", origin.getY())
+                            .putInt("z", origin.getZ())
                             .build()
                     );
                 }
@@ -360,16 +360,16 @@ public class JavaLevelEventTranslator extends PacketTranslator<ClientboundLevelE
                 levelEventPacket.setType(org.cloudburstmc.protocol.bedrock.data.LevelEvent.PARTICLE_SCULK_SHRIEK);
                 levelEventPacket.setTag(
                     NbtMap.builder()
-                        .putInt("originX", packet.getPosition().getX())
-                        .putInt("originY", packet.getPosition().getY())
-                        .putInt("originZ", packet.getPosition().getZ())
+                        .putInt("originX", origin.getX())
+                        .putInt("originY", origin.getY())
+                        .putInt("originZ", origin.getZ())
                         .build()
                 );
                 session.sendUpstreamPacket(levelEventPacket);
 
                 LevelSoundEventPacket soundEventPacket = new LevelSoundEventPacket();
                 soundEventPacket.setSound(SoundEvent.SCULK_SHRIEKER_SHRIEK);
-                soundEventPacket.setPosition(packet.getPosition().toFloat());
+                soundEventPacket.setPosition(origin.toFloat());
                 soundEventPacket.setExtraData(-1);
                 soundEventPacket.setIdentifier("");
                 soundEventPacket.setBabySound(false);

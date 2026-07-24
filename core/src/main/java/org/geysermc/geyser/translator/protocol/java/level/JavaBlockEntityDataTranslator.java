@@ -63,9 +63,9 @@ public class JavaBlockEntityDataTranslator extends PacketTranslator<ClientboundB
             return;
         }
 
-        Vector3i position = packet.getPosition();
+        Vector3i position = session.mapPosition(packet.getPosition());
         BlockEntityUtils.updateBlockEntity(session, translator.getBlockEntityTag(session, type, position.getX(), position.getY(), position.getZ(),
-                packet.getNbt(), blockState), packet.getPosition());
+                packet.getNbt(), blockState), position);
         // Check for custom skulls.
         boolean hasCustomHeadBlock = false;
         if (session.getPreferencesCache().showCustomSkulls() && packet.getNbt() != null && packet.getNbt().containsKey("profile")) {
@@ -83,7 +83,7 @@ public class JavaBlockEntityDataTranslator extends PacketTranslator<ClientboundB
         }
         if (!hasCustomHeadBlock) {
             BlockEntityUtils.updateBlockEntity(session, translator.getBlockEntityTag(session, type, position.getX(), position.getY(), position.getZ(),
-                    packet.getNbt(), blockState), packet.getPosition());
+                    packet.getNbt(), blockState), position);
         }
 
         // If block entity is command block, OP permission level is appropriate, player is in creative mode and the NBT is not empty

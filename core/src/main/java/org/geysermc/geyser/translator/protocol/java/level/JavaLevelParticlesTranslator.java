@@ -70,7 +70,8 @@ public class JavaLevelParticlesTranslator extends PacketTranslator<ClientboundLe
         if (particleCreateFunction != null) {
             if (packet.getAmount() == 0) {
                 // 0 means don't apply the offset
-                Vector3f position = Vector3f.from(packet.getX(), packet.getY(), packet.getZ());
+                // 粒子位置 Y 轴仅加 offset，不 clamp，允许粒子超出维度高度喵~
+                Vector3f position = Vector3f.from(packet.getX(), session.mapYUnclamped(packet.getY()), packet.getZ());
                 session.sendUpstreamPacket(particleCreateFunction.apply(position));
             } else {
                 Random random = ThreadLocalRandom.current();
@@ -79,7 +80,8 @@ public class JavaLevelParticlesTranslator extends PacketTranslator<ClientboundLe
                     double offsetX = random.nextGaussian() * (double) packet.getOffsetX();
                     double offsetY = random.nextGaussian() * (double) packet.getOffsetY();
                     double offsetZ = random.nextGaussian() * (double) packet.getOffsetZ();
-                    Vector3f position = Vector3f.from(packet.getX() + offsetX, packet.getY() + offsetY, packet.getZ() + offsetZ);
+                    // 粒子位置 Y 轴仅加 offset，不 clamp，允许粒子超出维度高度喵~
+                    Vector3f position = Vector3f.from(packet.getX() + offsetX, session.mapYUnclamped(packet.getY()) + offsetY, packet.getZ() + offsetZ);
 
                     session.sendUpstreamPacket(particleCreateFunction.apply(position));
                 }
@@ -148,7 +150,8 @@ public class JavaLevelParticlesTranslator extends PacketTranslator<ClientboundLe
 
                 Vector3f target;
                 if (data.getPositionSource() instanceof BlockPositionSource blockPositionSource) {
-                    target = blockPositionSource.getPosition().toFloat().add(0.5f, 0.5f, 0.5f);
+                    // 振动粒子目标方块位置 Y 轴仅加 offset，不 clamp喵~
+                    target = session.mapPositionUnclamped(blockPositionSource.getPosition().toFloat().add(0.5f, 0.5f, 0.5f));
                 } else if (data.getPositionSource() instanceof EntityPositionSource entityPositionSource) {
                     Entity entity = session.getEntityCache().getEntityByJavaId(entityPositionSource.getEntityId());
                     if (entity != null) {

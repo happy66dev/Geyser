@@ -59,7 +59,8 @@ public class JavaBlockEventTranslator extends PacketTranslator<ClientboundBlockE
 
     @Override
     public void translate(GeyserSession session, ClientboundBlockEventPacket packet) {
-        Vector3i position = packet.getPosition();
+        Vector3i javaPosition = packet.getPosition();
+        Vector3i position = session.mapPosition(javaPosition);
         BlockValue value = packet.getValue();
 
         if (value == null) {
@@ -78,7 +79,7 @@ public class JavaBlockEventTranslator extends PacketTranslator<ClientboundBlockE
             blockEventPacket.setEventType(1);
             session.sendUpstreamPacket(blockEventPacket);
         } else if (value instanceof NoteBlockValue) {
-            session.getGeyser().getWorldManager().getBlockAtAsync(session, position).thenAccept(blockState -> {
+            session.getGeyser().getWorldManager().getBlockAtAsync(session, javaPosition).thenAccept(blockState -> {
                 blockEventPacket.setEventData(BlockState.of(blockState).getValue(Properties.NOTE));
                 session.sendUpstreamPacket(blockEventPacket);
             });
@@ -92,7 +93,7 @@ public class JavaBlockEventTranslator extends PacketTranslator<ClientboundBlockE
                 // However, the retracting event is not fully covered. (Spigot)
                 // Mod platforms only handle pistons moving blocks; not the retracting of pistons.
                 if (action == PistonValueType.PULLING || action == PistonValueType.CANCELLED_MID_PUSH) {
-                    BlockState pistonBlock = session.getGeyser().getWorldManager().blockAt(session, position);
+                    BlockState pistonBlock = session.getGeyser().getWorldManager().blockAt(session, javaPosition);
 
                     // Retracting sticky pistons is an exception, since the event is not called on Spigot from 1.13.2 - 1.17.1
                     // See https://github.com/PaperMC/Paper/blob/6fa1983e9ce177a4a412d5b950fd978620174777/patches/server/0304-Fire-BlockPistonRetractEvent-for-all-empty-pistons.patch
@@ -103,7 +104,7 @@ public class JavaBlockEventTranslator extends PacketTranslator<ClientboundBlockE
 
                     // Only sticky pistons that don't pull any blocks are affected
                     if (action != PistonValueType.CANCELLED_MID_PUSH && isSticky) {
-                        Vector3i blockInFrontPos = position.add(direction.getUnitVector());
+                        Vector3i blockInFrontPos = javaPosition.add(direction.getUnitVector());
                         int blockInFront = session.getGeyser().getWorldManager().getBlockAt(session, blockInFrontPos);
                         if (blockInFront != Block.JAVA_AIR_ID) {
                             // Piston pulled something
@@ -117,7 +118,7 @@ public class JavaBlockEventTranslator extends PacketTranslator<ClientboundBlockE
                 }
             } else {
                 PistonBlockEntity blockEntity = pistonCache.getPistons().computeIfAbsent(position, pos -> {
-                    BlockState state = session.getGeyser().getWorldManager().blockAt(session, position);
+                    BlockState state = session.getGeyser().getWorldManager().blockAt(session, javaPosition);
                     boolean sticky = isSticky(state);
                     boolean extended = action != PistonValueType.PUSHING;
                     return new PistonBlockEntity(session, pos, direction, sticky, extended);
@@ -150,7 +151,7 @@ public class JavaBlockEventTranslator extends PacketTranslator<ClientboundBlockE
             // Decorated pots - wobble wobble
             // We need to send the sherd data with the client, but we don't really care about latency here so we
             // can safely get this from the server
-            session.getGeyser().getWorldManager().getDecoratedPotData(session, position, sherds -> {
+            session.getGeyser().getWorldManager().getDecoratedPotData(session, javaPosition, sherds -> {
                 BlockEntityDataPacket blockEntityPacket = new BlockEntityDataPacket();
                 blockEntityPacket.setBlockPosition(position);
 

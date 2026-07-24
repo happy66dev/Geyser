@@ -40,7 +40,8 @@ public record SoundEventEventTranslator(SoundEvent soundEvent,
         levelSoundEvent.setIdentifier(identifier);
         levelSoundEvent.setExtraData(extraData);
         levelSoundEvent.setRelativeVolumeDisabled(packet.isBroadcast());
-        levelSoundEvent.setPosition(Vector3f.from(packet.getPosition().getX() + 0.5f, packet.getPosition().getY() + 0.5f, packet.getPosition().getZ() + 0.5f));
+        // 声音事件位置 Y 轴仅加 offset，不 clamp，允许声音超出维度高度喵~
+        levelSoundEvent.setPosition(session.mapPositionUnclamped(Vector3f.from(packet.getPosition().getX() + 0.5f, packet.getPosition().getY() + 0.5f, packet.getPosition().getZ() + 0.5f)));
         levelSoundEvent.setBabySound(false);
         session.sendUpstreamPacket(levelSoundEvent);
     }

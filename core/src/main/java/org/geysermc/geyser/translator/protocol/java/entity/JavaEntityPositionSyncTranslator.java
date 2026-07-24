@@ -25,7 +25,7 @@
 
 package org.geysermc.geyser.translator.protocol.java.entity;
 
-import org.cloudburstmc.math.vector.Vector3d;
+import org.cloudburstmc.math.vector.Vector3f;
 import org.geysermc.geyser.entity.type.Entity;
 import org.geysermc.geyser.entity.vehicle.ClientVehicle;
 import org.geysermc.geyser.session.GeyserSession;
@@ -41,7 +41,8 @@ public class JavaEntityPositionSyncTranslator extends PacketTranslator<Clientbou
         Entity entity = session.getEntityCache().getEntityByJavaId(packet.getId());
         if (entity == null) return;
 
-        Vector3d pos = packet.getPosition();
+        // 实体位置同步 Y 轴仅加 offset，不 clamp，允许实体处于维度高度范围之外喵~
+        Vector3f pos = session.mapPositionUnclamped(packet.getPosition().toFloat());
 
         if (entity instanceof ClientVehicle clientVehicle) {
             // Ignore if player is controlling
@@ -51,6 +52,6 @@ public class JavaEntityPositionSyncTranslator extends PacketTranslator<Clientbou
             clientVehicle.getVehicleComponent().moveAbsolute(pos.getX(), pos.getY(), pos.getZ());
         }
 
-        entity.teleport(pos.toFloat(), packet.getYRot(), packet.getXRot(), packet.isOnGround());
+        entity.teleport(pos, packet.getYRot(), packet.getXRot(), packet.isOnGround());
     }
 }

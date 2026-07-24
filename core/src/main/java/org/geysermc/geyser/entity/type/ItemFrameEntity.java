@@ -187,7 +187,6 @@ public class ItemFrameEntity extends HangingEntity {
      */
     public void updateBlock(boolean force) {
         if (!changed && !force) {
-            // Don't send a block update packet - nothing changed
             return;
         }
         UpdateBlockPacket updateBlockPacket = new UpdateBlockPacket();

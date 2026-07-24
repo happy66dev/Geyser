@@ -150,7 +150,7 @@ public final class GeyserboundPacketHandlerImpl extends AbstractGeyserboundPacke
     @Override
     public void handlePistonEvent(GeyserboundPistonEventPacket packet) {
         Direction orientation = BlockState.of(packet.getBlockId()).getValue(Properties.FACING);
-        Vector3i position = packet.getPos();
+        Vector3i position = session.mapPosition(packet.getPos());
         boolean isExtend = packet.isExtend();
 
         var stream = packet.getAttachedBlocks()
@@ -159,7 +159,7 @@ public final class GeyserboundPacketHandlerImpl extends AbstractGeyserboundPacke
                 .map(entry -> Pair.of(entry.getKey(), BlockState.of(entry.getIntValue())))
                 .filter(pair -> BlockStateValues.canPistonMoveBlock(pair.value(), isExtend));
         Object2ObjectMap<Vector3i, BlockState> attachedBlocks = new Object2ObjectArrayMap<>();
-        stream.forEach(pair -> attachedBlocks.put(pair.key(), pair.value()));
+        stream.forEach(pair -> attachedBlocks.put(session.mapPosition(pair.key()), pair.value()));
 
         session.executeInEventLoop(() -> {
             PistonCache pistonCache = session.getPistonCache();

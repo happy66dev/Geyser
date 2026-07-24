@@ -54,21 +54,27 @@ public class JavaPlayerPositionTranslator extends PacketTranslator<ClientboundPl
 
         final SessionPlayerEntity entity = session.getPlayerEntity();
         if (entity.getVehicle() != null) { // Vanilla behaviour, the player ignores teleport if they're on a vehicle.
-            acceptTeleport(session, entity.position().toDouble(), entity.getJavaYaw(), entity.getPitch(), packet.getId());
+            // 玩家实体存储 Bedrock 坐标；回传 Java 服务端前必须反向映射喵~
+            acceptTeleport(session, session.inverseMapPosition(entity.position()).toDouble(), entity.getJavaYaw(), entity.getPitch(), packet.getId());
             return;
         }
 
-        Vector3d position = packet.getPosition().add(
-            packet.getRelatives().contains(PositionElement.X) ? entity.position().getX() : 0,
-            packet.getRelatives().contains(PositionElement.Y) ? entity.position().getY() : 0,
-            packet.getRelatives().contains(PositionElement.Z) ? entity.position().getZ() : 0);
+        // 相对传送必须先在 Java 坐标系里加算，避免映射后的 Bedrock 坐标参与 Java 端计算喵~
+        Vector3d javaEntityPos = session.inverseMapPosition(entity.position()).toDouble();
+        Vector3d javaTeleportPosition = packet.getPosition().add(
+            packet.getRelatives().contains(PositionElement.X) ? javaEntityPos.getX() : 0,
+            packet.getRelatives().contains(PositionElement.Y) ? javaEntityPos.getY() : 0,
+            packet.getRelatives().contains(PositionElement.Z) ? javaEntityPos.getZ() : 0);
+
+        // 仅 Bedrock 侧状态、传送包与确认缓存使用映射后的 float 坐标喵~
+        Vector3d position = session.mapPositionUnclamped(javaTeleportPosition.toFloat()).toDouble();
 
         float newPitch = MathUtils.clamp(packet.getXRot() + (packet.getRelatives().contains(PositionElement.X_ROT) ? entity.getPitch() : 0), -90, 90);
         float newYaw = packet.getYRot() + (packet.getRelatives().contains(PositionElement.Y_ROT) ? entity.getYaw() : 0);
 
         final int teleportId = packet.getId();
 
-        acceptTeleport(session, position, newYaw, newPitch, teleportId);
+        acceptTeleport(session, javaTeleportPosition, newYaw, newPitch, teleportId);
 
         if (!session.isSpawned()) {
             entity.setPosition(position.toFloat());
@@ -162,7 +168,7 @@ public class JavaPlayerPositionTranslator extends PacketTranslator<ClientboundPl
         // Confirm the teleport when we receive it to match Java edition
         ServerboundAcceptTeleportationPacket teleportConfirmPacket = new ServerboundAcceptTeleportationPacket(id);
         session.sendDownstreamGamePacket(teleportConfirmPacket);
-        // Servers (especially ones like Hypixel) expect exact coordinates given back to them.
+        // Java 服务端要求精确的原始 double 坐标；这里不能经历 float 映射往返喵~
         ServerboundMovePlayerPosRotPacket positionPacket = new ServerboundMovePlayerPosRotPacket(false, false, position.getX(), position.getY(), position.getZ(), yaw, pitch);
         session.sendDownstreamGamePacket(positionPacket);
     }

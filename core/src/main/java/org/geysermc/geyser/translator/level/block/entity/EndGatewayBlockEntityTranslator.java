@@ -46,7 +46,7 @@ public class EndGatewayBlockEntityTranslator extends BlockEntityTranslator {
         // Yes, the axis letters are capitalized
         NbtMap exitPortal = javaNbt.getCompound("ExitPortal");
         tagsList.add(exitPortal.getInt("X", 0));
-        tagsList.add(exitPortal.getInt("Y", 0));
+        tagsList.add(session.mapY(exitPortal.getInt("Y", 0)));
         tagsList.add(exitPortal.getInt( "Z", 0));
         bedrockNbt.put("ExitPortal", new NbtList<>(NbtType.INT, tagsList));
     }

@@ -27,6 +27,7 @@ package org.geysermc.geyser.entity.type;
 
 import lombok.Getter;
 import org.cloudburstmc.math.vector.Vector3f;
+import org.cloudburstmc.math.vector.Vector3i;
 import org.cloudburstmc.protocol.bedrock.data.entity.EntityDataTypes;
 import org.cloudburstmc.protocol.bedrock.packet.PlaySoundPacket;
 import org.geysermc.erosion.util.BlockPositionIterator;
@@ -176,7 +177,9 @@ public class FishingHookEntity extends ProjectileEntity {
      * @return true if this entity is currently in air.
      */
     protected boolean isInAir() {
-        int block = session.getGeyser().getWorldManager().getBlockAt(session, position.toInt());
+        // 实体内部位置已映射到 Bedrock 坐标；空气方块查询必须使用 Java 坐标喵~
+        Vector3i javaPosition = session.inverseMapPosition(position.toInt());
+        int block = session.getGeyser().getWorldManager().getBlockAt(session, javaPosition);
         return block == Block.JAVA_AIR_ID;
     }
 

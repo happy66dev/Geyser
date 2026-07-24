@@ -196,8 +196,9 @@ public class BlockBreakHandler {
             // This is why blockFace is individually turned into a Direction in each of the switch statements, except for the ABORT_BREAK one
             switch (actionData.getAction()) {
                 case DROP_ITEM -> {
+                    Vector3i javaPosition = session.inverseMapPosition(position);
                     ServerboundPlayerActionPacket dropItemPacket = new ServerboundPlayerActionPacket(PlayerAction.DROP_ITEM,
-                        position, Direction.getUntrusted(actionData, PlayerBlockActionData::getFace).mcpl(), 0);
+                        javaPosition, Direction.getUntrusted(actionData, PlayerBlockActionData::getFace).mcpl(), 0);
                     session.sendDownstreamGamePacket(dropItemPacket);
                 }
                 case START_BREAK -> {
@@ -309,11 +310,13 @@ public class BlockBreakHandler {
     protected void handleStartBreak(@NonNull Vector3i position, @NonNull BlockState state, Direction blockFace, long tick) {
         GeyserItemStack item = session.getPlayerInventory().getItemInHand();
 
-        // Account for fire - the client likes to hit the block behind.
+        Vector3i javaPosition = session.inverseMapPosition(position);
+
         Vector3i fireBlockPos = BlockUtils.getBlockPosition(position, blockFace);
-        Block possibleFireBlock = session.getGeyser().getWorldManager().blockAt(session, fireBlockPos).block();
+        Vector3i javaFireBlockPos = session.inverseMapPosition(fireBlockPos);
+        Block possibleFireBlock = session.getGeyser().getWorldManager().blockAt(session, javaFireBlockPos).block();
         if (possibleFireBlock == Blocks.FIRE || possibleFireBlock == Blocks.SOUL_FIRE) {
-            ServerboundPlayerActionPacket startBreakingPacket = new ServerboundPlayerActionPacket(PlayerAction.START_DIGGING, fireBlockPos,
+            ServerboundPlayerActionPacket startBreakingPacket = new ServerboundPlayerActionPacket(PlayerAction.START_DIGGING, javaFireBlockPos,
                 blockFace.mcpl(), session.getWorldCache().nextPredictionSequence());
             session.sendDownstreamGamePacket(startBreakingPacket);
         }
@@ -355,7 +358,7 @@ public class BlockBreakHandler {
             // but also #continueDestroyBlock in the same tick to advance the break progress.
             this.currentProgress = breakProgress;
 
-            session.sendDownstreamGamePacket(new ServerboundPlayerActionPacket(PlayerAction.START_DIGGING, position,
+            session.sendDownstreamGamePacket(new ServerboundPlayerActionPacket(PlayerAction.START_DIGGING, javaPosition,
                 blockFace.mcpl(), session.getWorldCache().nextPredictionSequence()));
         }
     }
@@ -423,10 +426,9 @@ public class BlockBreakHandler {
     }
 
     private void handleAbortBreaking(Vector3i position) {
-        // Bedrock edition "confirms" it stopped breaking blocks by sending an abort packet
-        // We don't forward those as a Java client wouldn't send those either
         if (currentBlockPos != null) {
-            ServerboundPlayerActionPacket abortBreakingPacket = new ServerboundPlayerActionPacket(PlayerAction.CANCEL_DIGGING, currentBlockPos,
+            Vector3i javaCurrentBlockPos = session.inverseMapPosition(currentBlockPos);
+            ServerboundPlayerActionPacket abortBreakingPacket = new ServerboundPlayerActionPacket(PlayerAction.CANCEL_DIGGING, javaCurrentBlockPos,
                 Direction.DOWN.mcpl(), 0);
             session.sendDownstreamGamePacket(abortBreakingPacket);
         }
@@ -441,7 +443,6 @@ public class BlockBreakHandler {
      * @return whether block breaking must stop due to an item frame interaction
      */
     protected boolean testForItemFrameEntity(Vector3i position) {
-        // Already interacted with item frame or lectern, skip
         if (interactPosition != null && interactPosition.equals(position)) {
             return true;
         }
@@ -473,7 +474,7 @@ public class BlockBreakHandler {
             this.session.setDroppingLecternBook(true);
 
             ServerboundUseItemOnPacket blockPacket = new ServerboundUseItemOnPacket(
-                position,
+                session.inverseMapPosition(position),
                 org.geysermc.mcprotocollib.protocol.data.game.entity.object.Direction.DOWN,
                 Hand.MAIN_HAND,
                 0, 0, 0,
@@ -534,8 +535,8 @@ public class BlockBreakHandler {
             }
         }
 
-        Vector3f playerPosition = session.getPlayerEntity().position().up(session.getEyeHeight());
-        return BedrockInventoryTransactionTranslator.canInteractWithBlock(session, playerPosition, vector);
+        Vector3f bedrockPlayerPosition = session.getPlayerEntity().position().up(session.getEyeHeight());
+        return BedrockInventoryTransactionTranslator.canInteractWithBlock(session, bedrockPlayerPosition, vector);
     }
 
     protected boolean canDestroyBlock(BlockState state) {
@@ -562,9 +563,9 @@ public class BlockBreakHandler {
     }
 
     protected void destroyBlock(BlockState state, Vector3i vector, Direction direction, boolean instamine) {
-        // Send java packet
+        Vector3i javaVector = session.inverseMapPosition(vector);
         session.sendDownstreamGamePacket(new ServerboundPlayerActionPacket(instamine ? PlayerAction.START_DIGGING : PlayerAction.FINISH_DIGGING,
-            vector, direction.mcpl(), session.getWorldCache().nextPredictionSequence()));
+            javaVector, direction.mcpl(), session.getWorldCache().nextPredictionSequence()));
         session.getWorldCache().markPositionInSequence(vector);
 
         if (canDestroyBlock(state)) {
@@ -622,7 +623,8 @@ public class BlockBreakHandler {
         }
 
         this.updatedServerBlockStateId = null;
-        return session.getGeyser().getWorldManager().blockAt(session, position);
+        Vector3i javaPos = session.inverseMapPosition(position);
+        return session.getGeyser().getWorldManager().blockAt(session, javaPos);
     }
 
     /**

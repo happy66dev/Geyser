@@ -336,13 +336,17 @@ public final class BedrockPlayerAuthInputTranslator extends PacketTranslator<Pla
             Vector3d correctedMovement = session.getCollisionManager().correctMovementForCollisions(movement, box, true, false);
             vehicle.setOnGround(correctedMovement.getY() != movement.getY() && session.getPlayerEntity().getLastTickEndVelocity().getY() < 0);
 
-            Vector3f vehiclePosition = packet.getPosition().down(vehicle.getOffset());
+            // Bedrock 载具坐标，本地状态与边界检测用这个喵~
+            Vector3f bedrockVehiclePos = packet.getPosition().down(vehicle.getOffset());
+            // Java 载具坐标，发给 Java 服务端前做反向映射喵~
+            Vector3f javaVehiclePos = session.inverseMapPosition(bedrockVehiclePos);
             Vector2f vehicleRotation = packet.getVehicleRotation();
             if (vehicleRotation == null) {
                 return; // If the client just got in or out of a vehicle for example.
             }
 
-            if (session.getWorldBorder().isPassingIntoBorderBoundaries(vehiclePosition)) {
+            // 世界边界只看 X/Z，Bedrock 与 Java 相同；用 Bedrock 坐标匹配上游 API 喵~
+            if (session.getWorldBorder().isPassingIntoBorderBoundaries(bedrockVehiclePos)) {
                 // This doesn't work if teleported is false
                 vehicle.moveAbsoluteRaw(position, vehicle instanceof BoatEntity ? vehicle.getYaw() - 90 : vehicle.getYaw(), vehicle.getPitch(), vehicle.getHeadYaw(), vehicle.isOnGround(), true);
 
@@ -351,10 +355,10 @@ public final class BedrockPlayerAuthInputTranslator extends PacketTranslator<Pla
                 return;
             }
 
-            vehicle.setPosition(vehiclePosition);
+            vehicle.setPosition(bedrockVehiclePos);
             ServerboundMoveVehiclePacket moveVehiclePacket = new ServerboundMoveVehiclePacket(
-                vehiclePosition.toDouble(),
-                vehicle instanceof BoatEntity ? vehicleRotation.getY() - 90 : vehicleRotation.getY(), vehiclePosition.getX(),
+                javaVehiclePos.toDouble(),
+                vehicle instanceof BoatEntity ? vehicleRotation.getY() - 90 : vehicleRotation.getY(), javaVehiclePos.getX(),
                 vehicle.isOnGround()
             );
             session.sendDownstreamGamePacket(moveVehiclePacket);

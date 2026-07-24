@@ -57,12 +57,15 @@ public class JavaTeleportEntityTranslator extends PacketTranslator<ClientboundTe
             return;
         }
 
-        Vector3d position = packet.getPosition();
-        position = position.add(
-            packet.getRelatives().contains(PositionElement.X) ? entity.position().getX() : 0,
-            packet.getRelatives().contains(PositionElement.Y) ? entity.position().getY() : 0,
-            packet.getRelatives().contains(PositionElement.Z) ? entity.position().getZ() : 0
+        // 实体内部保存的是 Bedrock 坐标；相对传送先在 Java 坐标系中计算目的地喵~
+        Vector3d javaCurrentPosition = session.inverseMapPosition(entity.position()).toDouble();
+        Vector3d javaPosition = packet.getPosition().add(
+            packet.getRelatives().contains(PositionElement.X) ? javaCurrentPosition.getX() : 0,
+            packet.getRelatives().contains(PositionElement.Y) ? javaCurrentPosition.getY() : 0,
+            packet.getRelatives().contains(PositionElement.Z) ? javaCurrentPosition.getZ() : 0
         );
+        // 向 Bedrock 更新实体时仅加 offset，不 clamp，避免超限实体被压到边界喵~
+        Vector3d position = session.mapPositionUnclamped(javaPosition.toFloat()).toDouble();
 
         boolean hasRelative = packet.getRelatives().contains(PositionElement.X) || packet.getRelatives().contains(PositionElement.Y) || packet.getRelatives().contains(PositionElement.Z);
         boolean interpolate = (entity instanceof LivingEntity || hasRelative) && entity.position().distance(position.toFloat()) < 4096.0;
@@ -96,12 +99,14 @@ public class JavaTeleportEntityTranslator extends PacketTranslator<ClientboundTe
         }
 
         if (!interpolate && !entity.getPassengers().isEmpty() && entity.getPassengers().getFirst() == session.getPlayerEntity() && !isPreviouslyRemovedVehicle) {
-            ServerboundMoveVehiclePacket vehiclePacket = new ServerboundMoveVehiclePacket(position, newYaw, newPitch, entity.isOnGround());
+            // 载具确认包回发 Java 服务端，必须使用未映射的 Java 坐标喵~
+            ServerboundMoveVehiclePacket vehiclePacket = new ServerboundMoveVehiclePacket(javaPosition, newYaw, newPitch, entity.isOnGround());
             session.sendDownstreamGamePacket(vehiclePacket);
         }
 
         if (isPreviouslyRemovedVehicle) {
-            ServerboundMovePlayerPosRotPacket positionPacket = new ServerboundMovePlayerPosRotPacket(false, false, position.getX(), position.getY(), position.getZ(), newYaw, newPitch);
+            // 玩家确认包回发 Java 服务端，必须使用未映射的 Java 坐标喵~
+            ServerboundMovePlayerPosRotPacket positionPacket = new ServerboundMovePlayerPosRotPacket(false, false, javaPosition.getX(), javaPosition.getY(), javaPosition.getZ(), newYaw, newPitch);
             session.sendDownstreamGamePacket(positionPacket);
         }
     }

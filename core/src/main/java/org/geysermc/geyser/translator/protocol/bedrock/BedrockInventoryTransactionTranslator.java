@@ -244,8 +244,8 @@ public class BedrockInventoryTransactionTranslator extends PacketTranslator<Inve
                         }
 
                         // As of 1.21, Paper does not have any additional range checks that would inconvenience normal players.
-                        Vector3f playerPosition = session.getPlayerEntity().position().up(session.getEyeHeight());
-                        if (!canInteractWithBlock(session, playerPosition, packetBlockPosition)) {
+                        Vector3f bedrockPlayerPosition = session.getPlayerEntity().position().up(session.getEyeHeight());
+                        if (!canInteractWithBlock(session, bedrockPlayerPosition, packetBlockPosition)) {
                             BlockUtils.restoreCorrectBlock(session, blockPos, packet.getHotbarSlot());
                             return;
                         }
@@ -272,7 +272,7 @@ public class BedrockInventoryTransactionTranslator extends PacketTranslator<Inve
                         Block place checks end - client is good to go
                          */
 
-                        BlockState blockState = session.getGeyser().getWorldManager().blockAt(session, packet.getBlockPosition());
+                        BlockState blockState = session.getGeyser().getWorldManager().blockAt(session, session.inverseMapPosition(packet.getBlockPosition()));
 
                         // Buttons on Java Edition cannot be interacted with when they are powered
                         if (blockState.block() instanceof ButtonBlock && blockState.getValue(Properties.POWERED)) {
@@ -296,7 +296,7 @@ public class BedrockInventoryTransactionTranslator extends PacketTranslator<Inve
                         int sequence = session.getWorldCache().nextPredictionSequence();
                         session.getWorldCache().markPositionInSequence(blockPos);
                         ServerboundUseItemOnPacket blockPacket = new ServerboundUseItemOnPacket(
-                                packet.getBlockPosition(),
+                                session.inverseMapPosition(packet.getBlockPosition()),
                                 Direction.getUntrusted(packet, InventoryTransactionPacket::getBlockFace).mcpl(),
                                 Hand.MAIN_HAND,
                                 cursorX, cursorY, cursorZ,

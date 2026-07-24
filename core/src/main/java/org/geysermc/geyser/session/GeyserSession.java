@@ -156,6 +156,7 @@ import org.geysermc.geyser.item.Items;
 import org.geysermc.geyser.item.type.BlockItem;
 import org.geysermc.geyser.level.BedrockDimension;
 import org.geysermc.geyser.level.JavaDimension;
+import org.geysermc.geyser.level.WorldHeightMapper;
 import org.geysermc.geyser.level.gamerule.GameRuleHandler;
 import org.geysermc.geyser.level.physics.CollisionManager;
 import org.geysermc.geyser.network.GameProtocol;
@@ -263,7 +264,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 @Getter
 public class GeyserSession implements GeyserConnection, GeyserCommandSource {
-    private static final String UNKNOWN_LOG_NAME = "This account";
 
     private final GeyserImpl geyser;
     private final UpstreamSession upstream;
@@ -502,6 +502,12 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
      */
     @Setter
     private BedrockDimension bedrockDimension = this.bedrockOverworldDimension;
+
+    @Setter
+    private WorldHeightMapper worldHeightMapper = WorldHeightMapper.identity();
+
+    // 仅在 debugMode 时记录已输出的区块高度组合，避免每个区块都重复输出 INFO 日志喵~
+    private final Set<String> loggedChunkHeightDiagnostics = new java.util.HashSet<>();
 
     @Setter
     private Vector3i lastBlockPlacePosition;
@@ -896,30 +902,24 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
      * Send all necessary packets to load Bedrock into the server
      */
     public void connect() {
-        // Note: this.dimensionType may be null here if the player is connecting from online mode
-        int minY = BedrockDimension.OVERWORLD.minY();
-        int maxY = BedrockDimension.OVERWORLD.maxY();
-        for (JavaDimension javaDimension : this.registryCache.registry(JavaRegistries.DIMENSION_TYPE).values()) {
-            if (javaDimension.bedrockId() == BedrockDimension.OVERWORLD_ID) {
-                minY = Math.min(minY, javaDimension.minY());
-                maxY = Math.max(maxY, javaDimension.minY() + javaDimension.height());
-            }
+        // 测试：初始 StartGamePacket 前无条件声明 Bedrock 完整高度窗口，保证后续代理转服不会错过扩展时机喵~
+        int minY = -512;
+        int maxY = 512;
+        final boolean isInOverworld = this.bedrockDimension == this.bedrockOverworldDimension;
+        this.bedrockOverworldDimension = new BedrockDimension(minY, maxY - minY, true, BedrockDimension.OVERWORLD_ID);
+        if (isInOverworld) {
+            this.bedrockDimension = this.bedrockOverworldDimension;
         }
-        minY = Math.max(minY, -512);
-        maxY = Math.min(maxY, 512);
 
-        if (minY < BedrockDimension.OVERWORLD.minY() || maxY > BedrockDimension.OVERWORLD.maxY()) {
-            final boolean isInOverworld = this.bedrockDimension == this.bedrockOverworldDimension;
-            this.bedrockOverworldDimension = new BedrockDimension(minY, maxY - minY, true, BedrockDimension.OVERWORLD_ID);
-            if (isInOverworld) {
-                this.bedrockDimension = this.bedrockOverworldDimension;
-            }
-            geyser.getLogger().debug("Extending overworld dimension to " + minY + " - " + maxY);
-
-            DimensionDataPacket dimensionDataPacket = new DimensionDataPacket();
-            dimensionDataPacket.getDefinitions().add(new DimensionDefinition("minecraft:overworld", maxY, minY, 5, 3));
-            upstream.sendPacket(dimensionDataPacket);
+        DimensionDataPacket dimensionDataPacket = new DimensionDataPacket();
+        dimensionDataPacket.getDefinitions().add(new DimensionDefinition("minecraft:overworld", maxY, minY, 5, 3));
+        // debugMode 下使用 INFO 输出无条件发送的完整 Bedrock 主世界高度声明喵~
+        if (geyser.config().debugMode()) {
+            geyser.getLogger().info("[height-map] DimensionDataPacket: identifier=minecraft:overworld, minY=" + minY
+                + ", maxY=" + maxY + ", height=" + (maxY - minY) + ", sections=" + ((maxY - minY) >> 4)
+                + ", reason=initial-full-height-test");
         }
+        upstream.sendPacket(dimensionDataPacket);
 
         startGame();
         sentSpawnPacket = true;
@@ -1028,7 +1028,7 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
 
     public void authenticateWithAuthChain(String authChain) {
         if (loggedIn) {
-            geyser.getLogger().severe(GeyserLocale.getLocaleStringLog("geyser.auth.already_loggedin", getAuthData() == null ? UNKNOWN_LOG_NAME : getAuthData().name()));
+            geyser.getLogger().severe(GeyserLocale.getLocaleStringLog("geyser.auth.already_loggedin", getAuthData().name()));
             return;
         }
 
@@ -1087,7 +1087,7 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
      */
     public void authenticateWithMicrosoftCode(boolean offlineAccess) {
         if (loggedIn) {
-            geyser.getLogger().severe(GeyserLocale.getLocaleStringLog("geyser.auth.already_loggedin", getAuthData() == null ? UNKNOWN_LOG_NAME : getAuthData().name()));
+            geyser.getLogger().severe(GeyserLocale.getLocaleStringLog("geyser.auth.already_loggedin", getAuthData().name()));
             return;
         }
 
@@ -2107,6 +2107,27 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
     }
 
     /**
+     * Starts debug-only Bedrock upstream packet diagnostics for the first twenty login seconds.
+     */
+    public void startUpstreamPacketDiagnostics() {
+        if (!geyser.config().debugMode()) {
+            return;
+        }
+
+        upstream.startPacketDiagnostics();
+        for (int snapshotSeconds = 5; snapshotSeconds <= 20; snapshotSeconds += 5) {
+            final int requestedSnapshotSeconds = snapshotSeconds;
+            scheduleInEventLoop(() -> {
+                String snapshot = upstream.packetDiagnosticsSnapshot(requestedSnapshotSeconds);
+                if (snapshot != null) {
+                    // 诊断结果必须输出到代理控制台，避免 debug 日志级别过滤掉排障数据喵~
+                    geyser.getLogger().info(bedrockUsername() + " " + snapshot);
+                }
+            }, requestedSnapshotSeconds, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
      * Queue a packet to be sent to player.
      *
      * @param packet the bedrock packet from the Cloudburst protocol lib
@@ -2722,5 +2743,60 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
 
     public String getDebugInfo() {
         return "Username: %s, DeviceOs: %s, Version: %s".formatted(bedrockUsername(), platform(), version());
+    }
+
+    public int mapY(int javaY) {
+        return worldHeightMapper.mapY(javaY);
+    }
+
+    public float mapY(float javaY) {
+        return worldHeightMapper.mapY(javaY);
+    }
+
+    public double mapY(double javaY) {
+        return worldHeightMapper.mapY(javaY);
+    }
+
+    public Vector3f mapPosition(Vector3f pos) {
+        return worldHeightMapper.mapPosition(pos);
+    }
+
+    public Vector3i mapPosition(Vector3i pos) {
+        return worldHeightMapper.mapPosition(pos);
+    }
+
+    // 仅加 offset 不 clamp，用于实体/声音/粒子等允许超出维度边界的坐标喵~
+    public float mapYUnclamped(float javaY) {
+        return worldHeightMapper.mapYUnclamped(javaY);
+    }
+
+    // double 版本，仅加 offset 不 clamp喵~
+    public double mapYUnclamped(double javaY) {
+        return worldHeightMapper.mapYUnclamped(javaY);
+    }
+
+    // 仅加 offset 不 clamp，Vector3f 版本喵~
+    public Vector3f mapPositionUnclamped(Vector3f pos) {
+        return worldHeightMapper.mapPositionUnclamped(pos);
+    }
+
+    public int inverseMapY(int bedrockY) {
+        return worldHeightMapper.inverseMapY(bedrockY);
+    }
+
+    public float inverseMapY(float bedrockY) {
+        return worldHeightMapper.inverseMapY(bedrockY);
+    }
+
+    public double inverseMapY(double bedrockY) {
+        return worldHeightMapper.inverseMapY(bedrockY);
+    }
+
+    public Vector3f inverseMapPosition(Vector3f pos) {
+        return worldHeightMapper.inverseMapPosition(pos);
+    }
+
+    public Vector3i inverseMapPosition(Vector3i pos) {
+        return worldHeightMapper.inverseMapPosition(pos);
     }
 }

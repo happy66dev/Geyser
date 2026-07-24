@@ -74,9 +74,25 @@ public class GeyserWorldManager extends WorldManager {
         } else if (session.isClosed()) {
             throw new ErosionCancellationException();
         }
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (; iter.hasNext(); iter.next()) {
+            minX = Math.min(minX, iter.getX());
+            minY = Math.min(minY, session.inverseMapY(iter.getY()));
+            minZ = Math.min(minZ, iter.getZ());
+            maxX = Math.max(maxX, iter.getX());
+            maxY = Math.max(maxY, session.inverseMapY(iter.getY()));
+            maxZ = Math.max(maxZ, iter.getZ());
+        }
+        iter.reset();
+        BlockPositionIterator javaIter = BlockPositionIterator.fromMinMax(minX, minY, minZ, maxX, maxY, maxZ);
         CompletableFuture<int[]> future = new CompletableFuture<>();
         erosionHandler.setPendingBatchLookup(future);
-        erosionHandler.sendPacket(new BackendboundBatchBlockRequestPacket(iter));
+        erosionHandler.sendPacket(new BackendboundBatchBlockRequestPacket(javaIter));
         return future.join();
     }
 

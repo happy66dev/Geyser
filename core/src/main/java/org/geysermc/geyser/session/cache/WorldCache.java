@@ -37,6 +37,7 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.cloudburstmc.math.vector.Vector3i;
 import org.cloudburstmc.protocol.bedrock.packet.SetTitlePacket;
 import org.geysermc.geyser.inventory.GeyserItemStack;
+import org.geysermc.geyser.level.block.type.BlockState;
 import org.geysermc.geyser.scoreboard.Scoreboard;
 import org.geysermc.geyser.scoreboard.ScoreboardUpdater.ScoreboardSession;
 import org.geysermc.geyser.session.GeyserSession;
@@ -179,16 +180,21 @@ public final class WorldCache {
         }
     }
 
-    public void updateServerCorrectBlockState(Vector3i position, int blockState) {
-        this.unverifiedPredictions.removeInt(position);
+    // Java 坐标只用于更新 Java ChunkCache；Bedrock 坐标只用于预测、破坏状态和上游方块更新喵~
+    public void updateServerCorrectBlockState(Vector3i javaPosition, Vector3i bedrockPosition, int blockState) {
+        // prediction 的键来自 Bedrock 客户端，必须使用 Bedrock 坐标移除喵~
+        this.unverifiedPredictions.removeInt(bedrockPosition);
 
-        // Hack to avoid looking up blockstates for the currently broken position each tick
+        // 当前破坏位置由 Bedrock 输入保存，必须使用 Bedrock 坐标比较喵~
         Vector3i clientBreakPos = session.getBlockBreakHandler().getCurrentBlockPos();
-        if (clientBreakPos != null && Objects.equals(clientBreakPos, position)) {
+        if (clientBreakPos != null && Objects.equals(clientBreakPos, bedrockPosition)) {
             session.getBlockBreakHandler().setUpdatedServerBlockStateId(blockState);
         }
 
-        ChunkUtils.updateBlock(session, blockState, position);
+        // 向 Bedrock 客户端发送确认方块更新，位置使用 Bedrock 坐标喵~
+        ChunkUtils.updateBlockClientSide(session, BlockState.of(blockState), bedrockPosition);
+        // ChunkCache 按 Java 维度 minY 和 Section 索引存储，位置必须使用 Java 坐标喵~
+        session.getChunkCache().updateBlock(javaPosition.getX(), javaPosition.getY(), javaPosition.getZ(), blockState);
     }
 
     public void removePrediction(Vector3i position) {
@@ -206,8 +212,10 @@ public final class WorldCache {
             if (entry.getIntValue() <= sequence) {
                 // This block may be out of sync with the server
                 // In 1.19.0 Java, you can verify this by trying to mine in spawn protection
-                Vector3i position = entry.getKey();
-                ChunkUtils.updateBlockClientSide(session, session.getGeyser().getWorldManager().blockAt(session, position), position);
+                // prediction 键是 Bedrock 坐标；查询 Java 后端前必须还原 Java 坐标喵~
+                Vector3i bedrockPosition = entry.getKey();
+                Vector3i javaPosition = session.inverseMapPosition(bedrockPosition);
+                ChunkUtils.updateBlockClientSide(session, session.getGeyser().getWorldManager().blockAt(session, javaPosition), bedrockPosition);
                 it.remove();
             }
         }

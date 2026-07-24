@@ -125,9 +125,12 @@ public class GeyserPistonListener implements Listener {
 
             session.executeInEventLoop(() -> {
                 PistonCache pistonCache = session.getPistonCache();
-                PistonBlockEntity blockEntity = pistonCache.getPistons().computeIfAbsent(position, pos ->
-                        new PistonBlockEntity(session, position, orientation, sticky, !isExtend));
-                blockEntity.setAction(type, attachedBlocks);
+                Vector3i bedrockPosition = session.mapPosition(position);
+                Object2ObjectMap<Vector3i, BlockState> bedrockAttachedBlocks = new Object2ObjectArrayMap<>();
+                attachedBlocks.forEach((blockPos, state) -> bedrockAttachedBlocks.put(session.mapPosition(blockPos), state));
+                PistonBlockEntity blockEntity = pistonCache.getPistons().computeIfAbsent(bedrockPosition, pos ->
+                        new PistonBlockEntity(session, bedrockPosition, orientation, sticky, !isExtend));
+                blockEntity.setAction(type, bedrockAttachedBlocks);
             });
         }
     }

@@ -14,6 +14,20 @@ The ultimate goal of this project is to allow Minecraft: Bedrock Edition users t
 
 Special thanks to the DragonProxy project for being a trailblazer in protocol translation and for all the team members who have joined us here!
 
+## 本分支改动
+
+本分支基于 GeyserMC/Geyser，主要增加并修正 Java 与 Bedrock 世界高度坐标转换喵~
+
+- 在初始连接阶段声明完整 Bedrock 主世界高度窗口，并为超高 Java 维度建立双向 Y 坐标映射喵~
+- 按映射后的高度处理区块 Section、生物群系、区块实体及动态方块更新喵~
+- 在方块预测、服务端确认、缓存回滚和交互路径中区分 Java 服务端坐标与 Bedrock 客户端坐标喵~
+- 为实体、载具、掉落物、钓鱼钩、投射物、声音、粒子和传送应用对应的坐标转换；实体位置只应用 offset，不按世界边界截断喵~
+- 在 `debugMode` 下使用 INFO 日志输出高度声明、活动映射、区块编码及 Bedrock 上游包诊断喵~
+
+上游 GeyserMC/Geyser 代码继续遵循原有 MIT License，并保留原版权与许可声明；本分支新增及由本分支作者创作的修改部分按 AGPL-3.0-or-later 说明发布喵~
+
+本项目使用 AI 辅助进行二次开发，所有改动仍经过人工审查与测试喵~
+
 ## Supported Versions
 
 | Edition | Supported Versions                                                                                |

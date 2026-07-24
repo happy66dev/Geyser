@@ -227,7 +227,7 @@ public class PistonBlockEntity {
 
     private void removePistonHead() {
         Vector3i blockInFront = position.add(orientation.getUnitVector());
-        BlockState state = session.getGeyser().getWorldManager().blockAt(session, blockInFront);
+        BlockState state = blockAt(blockInFront);
         if (state.is(Blocks.PISTON_HEAD)) {
             ChunkUtils.updateBlock(session, Block.JAVA_AIR_ID, blockInFront);
         } else if ((session.getGeyser().getWorldManager().hasOwnChunkCache() || session.getErosionHandler().isActive()) && state.is(Blocks.AIR)) {
@@ -261,7 +261,7 @@ public class PistonBlockEntity {
             if (!blocksChecked.add(blockPos)) {
                 continue;
             }
-            BlockState state = session.getGeyser().getWorldManager().blockAt(session, blockPos);
+            BlockState state = blockAt(blockPos);
             if (state.block() == Blocks.AIR) {
                 continue;
             }
@@ -284,7 +284,7 @@ public class PistonBlockEntity {
                         if (action == PistonValueType.PULLING && position.add(directionOffset).equals(adjacentPos)) {
                             continue;
                         }
-                        BlockState adjacentBlockState = session.getGeyser().getWorldManager().blockAt(session, adjacentPos);
+                        BlockState adjacentBlockState = blockAt(adjacentPos);
                         if (adjacentBlockState.block() != Blocks.AIR && BlockStateValues.isBlockAttached(state, adjacentBlockState) && BlockStateValues.canPistonMoveBlock(adjacentBlockState, false)) {
                             // If it is another slime/honey block we need to check its adjacent blocks
                             if (BlockStateValues.isBlockSticky(adjacentBlockState)) {
@@ -652,7 +652,7 @@ public class PistonBlockEntity {
             // Don't place blocks that collide with the player
             if (!SOLID_BOUNDING_BOX.checkIntersection(blockPos.toDouble(), playerBoundingBox)) {
                 // Not using the cached block to ensure we don't override a possibly changed state
-                ChunkUtils.updateBlock(session, session.getGeyser().getWorldManager().blockAt(session, blockPos), blockPos);
+                ChunkUtils.updateBlock(session, blockAt(blockPos), blockPos);
             }
         });
         if (action == PistonValueType.PUSHING) {
@@ -688,6 +688,10 @@ public class PistonBlockEntity {
             flattenedAttachedBlocks[3 * i + 2] = position.getZ();
             i++;
         }
+    }
+
+    private BlockState blockAt(Vector3i position) {
+        return session.getGeyser().getWorldManager().blockAt(session, session.inverseMapPosition(position));
     }
 
     /**

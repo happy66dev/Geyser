@@ -176,6 +176,7 @@ public class CollisionManager {
             return null;
         }
 
+        // 碰撞几何保留在 Bedrock 映射坐标空间；方块状态查询在独立路径中反向映射喵~
         // We need to parse the float as a string since casting a float to a double causes us to
         // lose precision and thus, causes players to get stuck when walking near walls
         double javaY = Double.parseDouble(Float.toString(bedrockPosition.getY())) - PLAYER_OFFSET;
@@ -390,7 +391,9 @@ public class CollisionManager {
             int y = iter.getY();
             int z = iter.getZ();
             if (checkWorld) {
-                int blockId = session.getGeyser().getWorldManager().getBlockAt(session, x, y, z);
+                // 碰撞迭代器使用 Bedrock 坐标；查询 Java 世界前只反向映射 Y 轴喵~
+                int javaY = session.inverseMapY(y);
+                int blockId = session.getGeyser().getWorldManager().getBlockAt(session, x, javaY, z);
 
                 BlockCollision blockCollision = walkOnLava ? getCollisionLavaWalking(blockId, y, boundingBox) : BlockUtils.getCollision(blockId);
                 if (blockCollision != null && !(blockCollision instanceof ScaffoldingCollision)) {
@@ -478,7 +481,8 @@ public class CollisionManager {
         BlockPositionIterator iter = CollisionManager.collidableBlocksIterator(session, playerBox);
         double totalPushUp = 0;
         while (iter.hasNext()) {
-            int blockId = session.getGeyser().getWorldManager().getBlockAt(session, iter.getX(), iter.getY(), iter.getZ());
+            // 传送碰撞箱位于 Bedrock 映射空间；世界方块查询使用 Java 原始 Y 喵~
+            int blockId = session.getGeyser().getWorldManager().getBlockAt(session, iter.getX(), session.inverseMapY(iter.getY()), iter.getZ());
             BlockCollision collision = BlockUtils.getCollision(blockId);
             if (collision != null) {
                 for (BoundingBox box : collision.getBoundingBoxes()) {
