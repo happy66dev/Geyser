@@ -24,7 +24,9 @@ Special thanks to the DragonProxy project for being a trailblazer in protocol tr
 - 为实体、载具、掉落物、钓鱼钩、投射物、声音、粒子和传送应用对应的坐标转换；实体位置只应用 offset，不按世界边界截断喵~
 - 在 `debugMode` 下使用 INFO 日志输出高度声明、活动映射、区块编码及 Bedrock 上游包诊断喵~
 
-上游 GeyserMC/Geyser 代码继续遵循原有 MIT License，并保留原版权与许可声明；本分支新增及由本分支作者创作的修改部分按 AGPL-3.0-or-later 说明发布喵~
+上游 GeyserMC/Geyser 代码继续遵循原有 MIT License，并保留原版权与许可声明；根目录 `LICENSE` 保持上游 MIT License 不变。本分支作者新增及修改的部分按 AGPL-3.0-or-later 说明发布，完整文本位于 `LICENSE-AGPL-3.0`，不改变上游代码的 MIT 授权范围喵~
+
+公开开发分支为 `new-happy`，它以最新上游代码为基底并只保留一条汇总的 fork 改动 commit；旧 `happy` 分支的测试 commit 仅保留为私有历史，不会发布喵~
 
 本项目使用 AI 辅助进行二次开发，所有改动仍经过人工审查与测试喵~
 

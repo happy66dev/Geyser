@@ -54,6 +54,7 @@ import org.geysermc.geyser.level.block.type.TrapDoorBlock;
 import org.geysermc.geyser.session.GeyserSession;
 import org.geysermc.geyser.session.cache.TeleportCache;
 import org.geysermc.geyser.session.cache.tags.BlockTag;
+import org.geysermc.geyser.text.GeyserLocale;
 import org.geysermc.geyser.util.AttributeUtils;
 import org.geysermc.geyser.util.DimensionUtils;
 import org.geysermc.geyser.util.MathUtils;
@@ -102,6 +103,16 @@ public class SessionPlayerEntity extends PlayerEntity {
      */
     @Getter
     private boolean isRidingInFront;
+
+    /**
+     * 确保每个会话只发送一次 Bedrock 最高高度提示喵~
+     */
+    private boolean sentMaximumHeightWarning;
+
+    /**
+     * 确保每个会话只发送一次 Java 到 Bedrock 的高度映射提示喵~
+     */
+    private boolean sentHeightOffsetNotice;
     /**
      * Used when emulating client-side vehicles
      */
@@ -200,6 +211,29 @@ public class SessionPlayerEntity extends PlayerEntity {
             }
         }
         this.position = position;
+        sendMaximumHeightWarning(position);
+    }
+
+    /**
+     * 在映射后的 Bedrock 玩家坐标触及最高支持高度时，向玩家显示一次兼容性提示喵~
+     */
+    private void sendMaximumHeightWarning(Vector3f position) {
+        if (!sentMaximumHeightWarning && position.getY() >= 511) {
+            // 喵~防御：用会话内标记阻止移动和传送反复触发最高高度提示喵~
+            sentMaximumHeightWarning = true;
+            session.sendMessage(GeyserLocale.getPlayerLocaleString("geyser.chat.height_max_warning", session.locale()));
+        }
+    }
+
+    /**
+     * 在映射维度加载完成后仅向当前玩家告知一次实际高度偏移量喵~
+     */
+    public void sendHeightOffsetNotice(int offset) {
+        if (!sentHeightOffsetNotice) {
+            // 喵~防御：用会话内标记阻止重复的维度加载包刷屏喵~
+            sentHeightOffsetNotice = true;
+            session.sendMessage(GeyserLocale.getPlayerLocaleString("geyser.chat.height_offset_notice", session.locale(), offset));
+        }
     }
 
     @Override
@@ -261,6 +295,7 @@ public class SessionPlayerEntity extends PlayerEntity {
             // getOffset will also account for a reduced offset (0.2) when sleeping
             this.position = position.down(getOffset());
         }
+        sendMaximumHeightWarning(this.position);
 
         // Player is "above" the void so they're not supposed to no clip.
         if (session.isNoClip() && this.position.getY() >= session.getBedrockDimension().minY() - 5) {
