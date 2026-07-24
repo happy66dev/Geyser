@@ -225,9 +225,7 @@ public class ChunkUtils {
 
         WorldHeightMapper mapper = WorldHeightMapper.create(dimension);
         session.setWorldHeightMapper(mapper);
-        if (mapper.needsMapping()) {
-            session.getPlayerEntity().sendHeightOffsetNotice(mapper.offset());
-        }
+        session.getPlayerEntity().queueHeightOffsetNotice(mapper.needsMapping() ? mapper.offset() : null);
 
         BedrockDimension defaultBedrockDimension = session.getBedrockDimension();
         if (minY < defaultBedrockDimension.minY() || maxY > defaultBedrockDimension.maxY()) {

@@ -113,6 +113,11 @@ public class SessionPlayerEntity extends PlayerEntity {
      * 确保每个会话只发送一次 Java 到 Bedrock 的高度映射提示喵~
      */
     private boolean sentHeightOffsetNotice;
+
+    /**
+     * 在 Bedrock 客户端完成生成后需要显示的高度映射偏移量喵~
+     */
+    private @Nullable Integer pendingHeightOffsetNotice;
     /**
      * Used when emulating client-side vehicles
      */
@@ -211,14 +216,13 @@ public class SessionPlayerEntity extends PlayerEntity {
             }
         }
         this.position = position;
-        sendMaximumHeightWarning(position);
     }
 
     /**
-     * 在映射后的 Bedrock 玩家坐标触及最高支持高度时，向玩家显示一次兼容性提示喵~
+     * 在 Bedrock 客户端可见的最终玩家位置触及最高高度时，向玩家显示一次兼容性提示喵~
      */
-    private void sendMaximumHeightWarning(Vector3f position) {
-        if (!sentMaximumHeightWarning && position.getY() >= 511) {
+    public void sendMaximumHeightWarning(Vector3f bedrockPosition) {
+        if (!sentMaximumHeightWarning && bedrockPosition.getY() >= 511) {
             // 喵~防御：用会话内标记阻止移动和传送反复触发最高高度提示喵~
             sentMaximumHeightWarning = true;
             session.sendMessage(GeyserLocale.getPlayerLocaleString("geyser.chat.height_max_warning", session.locale()));
@@ -226,14 +230,23 @@ public class SessionPlayerEntity extends PlayerEntity {
     }
 
     /**
-     * 在映射维度加载完成后仅向当前玩家告知一次实际高度偏移量喵~
+     * 记录映射维度的偏移量，等待 Bedrock 客户端完成生成后再显示提示喵~
      */
-    public void sendHeightOffsetNotice(int offset) {
-        if (!sentHeightOffsetNotice) {
-            // 喵~防御：用会话内标记阻止重复的维度加载包刷屏喵~
+    public void queueHeightOffsetNotice(@Nullable Integer offset) {
+        // 喵~防御：未映射维度清空待发送状态，防止旧维度的偏移提示延迟显示喵~
+        pendingHeightOffsetNotice = offset;
+    }
+
+    /**
+     * 在 Bedrock 客户端完成生成后发送已排队的高度映射提示喵~
+     */
+    public void sendPendingHeightOffsetNotice() {
+        if (!sentHeightOffsetNotice && pendingHeightOffsetNotice != null) {
+            // 喵~防御：仅在实际发送时消耗一次性标记，避免登录期丢包后永不重试喵~
             sentHeightOffsetNotice = true;
-            session.sendMessage(GeyserLocale.getPlayerLocaleString("geyser.chat.height_offset_notice", session.locale(), offset));
+            session.sendMessage(GeyserLocale.getPlayerLocaleString("geyser.chat.height_offset_notice", session.locale(), pendingHeightOffsetNotice));
         }
+        pendingHeightOffsetNotice = null;
     }
 
     @Override
@@ -295,7 +308,7 @@ public class SessionPlayerEntity extends PlayerEntity {
             // getOffset will also account for a reduced offset (0.2) when sleeping
             this.position = position.down(getOffset());
         }
-        sendMaximumHeightWarning(this.position);
+        sendMaximumHeightWarning(position);
 
         // Player is "above" the void so they're not supposed to no clip.
         if (session.isNoClip() && this.position.getY() >= session.getBedrockDimension().minY() - 5) {

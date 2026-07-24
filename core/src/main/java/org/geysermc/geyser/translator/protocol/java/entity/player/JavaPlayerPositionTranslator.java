@@ -102,6 +102,8 @@ public class JavaPlayerPositionTranslator extends PacketTranslator<ClientboundPl
             // Log out and back in - and you're looking elsewhere :)
             entity.updateOwnRotation(entity.getYaw(), entity.getPitch(), entity.getHeadYaw());
             session.setSpawned(true);
+            entity.sendPendingHeightOffsetNotice();
+            entity.sendMaximumHeightWarning(entity.bedrockPosition());
 
             // Make sure the player moves away from (0, 32767, 0) before accepting movement packets
             Vector3f entityPosition = entity.position();
@@ -146,6 +148,7 @@ public class JavaPlayerPositionTranslator extends PacketTranslator<ClientboundPl
         // Set the unconfirmed teleport to ensure we send the adjusted Bedrock position in moveAbsolute (see CollisionManager#adjustPositionForBedrock)
         session.setUnconfirmedTeleport(new TeleportCache(session, teleportDestination, deltaMovement, newPitch, newYaw, teleportId, type));
         entity.moveAbsolute(teleportDestination, newYaw, newPitch, false, true);
+        entity.sendMaximumHeightWarning(entity.bedrockPosition());
 
         // Bedrock ignores teleports that are extremely close to the player's original position and orientation, so check if we need to cache the teleport
         if (lastPlayerPosition.distanceSquared(teleportDestination) < 0.001 && Math.abs(newPitch - lastPlayerPitch) < 5 && Math.abs(newYaw - lastPlayerYaw) < 5) {
