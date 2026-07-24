@@ -229,9 +229,12 @@ public class BlockInventoryHolder extends InventoryHolder {
             }
         }
 
-        // Reset to correct block
+        // 持有器位置属于 Bedrock 坐标；查询 Java 世界前必须反向映射，避免高度映射维度恢复错误方块喵~
         Vector3i holderPos = container.getHolderPosition();
-        int realBlock = session.getGeyser().getWorldManager().getBlockAt(session, holderPos.getX(), holderPos.getY(), holderPos.getZ());
+        // 喵~防御：保留原 Bedrock 坐标作为客户端方块更新位置，仅转换 Java 世界查询坐标喵~
+        Vector3i javaHolderPos = session.inverseMapPosition(holderPos);
+        // 使用 Java 坐标读取被假方块覆盖的原始方块状态喵~
+        int realBlock = session.getGeyser().getWorldManager().getBlockAt(session, javaHolderPos.getX(), javaHolderPos.getY(), javaHolderPos.getZ());
         UpdateBlockPacket blockPacket = new UpdateBlockPacket();
         blockPacket.setDataLayer(0);
         blockPacket.setBlockPosition(holderPos);

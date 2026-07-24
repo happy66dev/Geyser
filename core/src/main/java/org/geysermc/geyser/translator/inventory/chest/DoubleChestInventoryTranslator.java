@@ -182,16 +182,20 @@ public class DoubleChestInventoryTranslator extends ChestInventoryTranslator<Con
         }
 
         if (!container.isUsingRealBlock()) {
+            // 保存主假箱子的 Bedrock 坐标，用于向客户端恢复对应位置的方块喵~
             Vector3i holderPos = container.getHolderPosition();
-            int realBlock = session.getGeyser().getWorldManager().getBlockAt(session, holderPos);
+            // 喵~防御：查询 Java 世界前反向映射 Bedrock 坐标，避免高度映射维度读取错误高度喵~
+            int realBlock = session.getGeyser().getWorldManager().getBlockAt(session, session.inverseMapPosition(holderPos));
             UpdateBlockPacket blockPacket = new UpdateBlockPacket();
             blockPacket.setDataLayer(0);
             blockPacket.setBlockPosition(holderPos);
             blockPacket.setDefinition(session.getBlockMappings().getBedrockBlock(realBlock));
             session.sendUpstreamPacket(blockPacket);
 
+            // 切换到右侧假箱子的 Bedrock 坐标喵~
             holderPos = holderPos.add(Vector3i.UNIT_X);
-            realBlock = session.getGeyser().getWorldManager().getBlockAt(session, holderPos);
+            // 喵~防御：右侧方块也必须用反向映射后的 Java 坐标查询，避免只复原半个双箱子喵~
+            realBlock = session.getGeyser().getWorldManager().getBlockAt(session, session.inverseMapPosition(holderPos));
             blockPacket = new UpdateBlockPacket();
             blockPacket.setDataLayer(0);
             blockPacket.setBlockPosition(holderPos);
