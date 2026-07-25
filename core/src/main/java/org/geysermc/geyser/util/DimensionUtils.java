@@ -48,10 +48,11 @@ public class DimensionUtils {
     public static final String BEDROCK_FOG_HELL = "minecraft:fog_hell";
 
     public static void switchDimension(GeyserSession session, JavaDimension javaDimension) {
-        switchDimension(session, javaDimension, javaDimension.bedrockId());
+        ChunkUtils.prepareDimension(session, javaDimension);
+        switchDimension(session, javaDimension, session.getBedrockDimension());
     }
 
-    public static void switchDimension(GeyserSession session, JavaDimension javaDimension, int bedrockDimension) {
+    public static void switchDimension(GeyserSession session, JavaDimension javaDimension, BedrockDimension bedrockDimension) {
         @Nullable JavaDimension previousDimension = session.getDimensionType(); // previous java dimension; can be null if an online player with no saved auth token logs in.
 
         Entity player = session.getPlayerEntity();
@@ -103,6 +104,11 @@ public class DimensionUtils {
     public static void fastSwitchDimension(GeyserSession session, int bedrockDimension) {
         changeDimension(session, bedrockDimension);
         finalizeDimensionSwitch(session, session.getPlayerEntity());
+    }
+
+    private static void changeDimension(GeyserSession session, BedrockDimension bedrockDimension) {
+        changeDimension(session, bedrockDimension.bedrockId());
+        session.setBedrockDimension(bedrockDimension);
     }
 
     private static void changeDimension(GeyserSession session, int bedrockDimension) {

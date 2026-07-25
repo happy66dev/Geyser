@@ -95,8 +95,8 @@ public class JavaLoginTranslator extends PacketTranslator<ClientboundLoginPacket
 
         boolean needsSpawnPacket = !session.isSentSpawnPacket();
         if (needsSpawnPacket) {
-            // The player has yet to spawn so let's do that using some of the information in this Java packet
-            DimensionUtils.setBedrockDimension(session, newDimension.bedrockId());
+            // 在 StartGame 与首个空区块前先统一目标维度高度，避免下界先按 128 高初始化喵~
+            ChunkUtils.prepareDimension(session, newDimension);
             session.startUpstreamPacketDiagnostics();
             session.connect();
 

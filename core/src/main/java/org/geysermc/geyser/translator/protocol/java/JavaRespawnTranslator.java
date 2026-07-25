@@ -34,7 +34,6 @@ import org.geysermc.geyser.session.GeyserSession;
 import org.geysermc.geyser.session.cache.registry.JavaRegistries;
 import org.geysermc.geyser.translator.protocol.PacketTranslator;
 import org.geysermc.geyser.translator.protocol.Translator;
-import org.geysermc.geyser.util.ChunkUtils;
 import org.geysermc.geyser.util.DimensionUtils;
 import org.geysermc.geyser.util.EntityUtils;
 import org.geysermc.mcprotocollib.protocol.data.game.entity.player.PlayerSpawnInfo;
@@ -92,9 +91,8 @@ public class JavaRespawnTranslator extends PacketTranslator<ClientboundRespawnPa
             }
             session.setWorldName(spawnInfo.getWorldName());
             session.resetTimeParameters();
+            // switchDimension 会在发送 ChangeDimension 与首批空区块前准备目标高度状态喵~
             DimensionUtils.switchDimension(session, newDimension);
-
-            ChunkUtils.loadDimension(session);
         }
 
         session.sendDownstreamGamePacket(ServerboundPlayerLoadedPacket.INSTANCE);

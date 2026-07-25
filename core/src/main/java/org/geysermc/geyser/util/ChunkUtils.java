@@ -184,6 +184,13 @@ public class ChunkUtils {
             return data;
         });
 
+        if (session.getGeyser().config().debugMode()) {
+            session.getGeyser().getLogger().info("[height-map] empty chunk: chunkX=" + chunkX + ", chunkZ=" + chunkZ
+                + ", dimension=" + bedrockDimension.bedrockId() + ", minY=" + bedrockDimension.minY()
+                + ", maxY=" + bedrockDimension.maxY() + ", sections=" + bedrockSubChunkCount
+                + ", forceUpdate=" + forceUpdate);
+        }
+
         LevelChunkPacket data = new LevelChunkPacket();
         data.setDimension(bedrockDimension.bedrockId());
         data.setChunkX(chunkX);
@@ -199,6 +206,10 @@ public class ChunkUtils {
             blockPacket.setBlockPosition(pos);
             blockPacket.setDataLayer(0);
             blockPacket.setDefinition(session.getBlockMappings().getBedrockBlock(1));
+            if (session.getGeyser().config().debugMode()) {
+                session.getGeyser().getLogger().info("[height-map] empty chunk force update: position=" + pos
+                    + ", runtimeId=" + blockPacket.getDefinition().getRuntimeId());
+            }
             session.sendUpstreamPacket(blockPacket);
         }
     }
@@ -214,11 +225,10 @@ public class ChunkUtils {
     }
 
     /**
-     * Process the minimum and maximum heights for this dimension, and processes the world coordinate scale.
-     * This must be done after the player has switched dimensions so we know what their dimension is
+     * Prepares the height state that all Bedrock packets for a Java dimension must share.
+     * This must run before StartGame or ChangeDimension sends the first empty chunks.
      */
-    public static void loadDimension(GeyserSession session) {
-        JavaDimension dimension = session.getDimensionType();
+    public static void prepareDimension(GeyserSession session, JavaDimension dimension) {
         int minY = dimension.minY();
         int height = dimension.height();
         int maxY = minY + height;
@@ -227,27 +237,37 @@ public class ChunkUtils {
         session.setWorldHeightMapper(mapper);
         session.getPlayerEntity().queueHeightOffsetNotice(mapper.needsMapping() ? mapper.offset() : null);
 
-        BedrockDimension defaultBedrockDimension = session.getBedrockDimension();
-        if (minY < defaultBedrockDimension.minY() || maxY > defaultBedrockDimension.maxY()) {
-            session.setBedrockDimension(mapper.createBedrockDimension(dimension.bedrockId()));
-        }
+        BedrockDimension defaultBedrockDimension = switch (dimension.bedrockId()) {
+            case BedrockDimension.END_ID -> BedrockDimension.THE_END;
+            case BedrockDimension.DEFAULT_NETHER_ID -> BedrockDimension.THE_NETHER;
+            default -> session.getBedrockOverworldDimension();
+        };
+        BedrockDimension bedrockDimension = minY < defaultBedrockDimension.minY() || maxY > defaultBedrockDimension.maxY()
+            ? mapper.createBedrockDimension(dimension.bedrockId()) : defaultBedrockDimension;
+        session.setBedrockDimension(bedrockDimension);
 
-        BedrockDimension bedrockDimension = session.getBedrockDimension();
-        // debugMode 下使用 INFO 输出维度加载后的实际映射与区块高度配置喵~
         if (session.getGeyser().config().debugMode()) {
-            session.getGeyser().getLogger().info("[height-map] active dimension: javaMinY=" + minY + ", javaMaxY=" + maxY
+            session.getGeyser().getLogger().info("[height-map] prepared dimension: javaMinY=" + minY + ", javaMaxY=" + maxY
                 + ", mapperOffset=" + mapper.offset() + ", mapperNeedsMapping=" + mapper.needsMapping()
-                + ", bedrockMinY=" + bedrockDimension.minY() + ", bedrockMaxY=" + bedrockDimension.maxY()
-                + ", bedrockHeight=" + bedrockDimension.height() + ", sections=" + (bedrockDimension.height() >> 4));
+                + ", bedrockId=" + bedrockDimension.bedrockId() + ", bedrockMinY=" + bedrockDimension.minY()
+                + ", bedrockMaxY=" + bedrockDimension.maxY() + ", bedrockHeight=" + bedrockDimension.height()
+                + ", sections=" + (bedrockDimension.height() >> 4) + ", custom=" + bedrockDimension.isCustom());
         }
         if (SHOW_CHUNK_HEIGHT_WARNING_LOGS && (minY < bedrockDimension.minY() || (bedrockDimension.doUpperHeightWarn() && maxY > bedrockDimension.maxY()))) {
             session.getGeyser().getLogger().warning(GeyserLocale.getLocaleStringLog("geyser.network.translator.chunk.out_of_bounds",
                     String.valueOf(bedrockDimension.minY()),
                     String.valueOf(bedrockDimension.maxY()),
-                    session.getRegistryCache().registry(JavaRegistries.DIMENSION_TYPE).byValue(session.getDimensionType())));
+                    session.getRegistryCache().registry(JavaRegistries.DIMENSION_TYPE).byValue(dimension)));
         }
 
         session.getChunkCache().setMinY(minY);
         session.getChunkCache().setHeightY(height);
+    }
+
+    /**
+     * Processes the current Java dimension after its type has been stored in the session.
+     */
+    public static void loadDimension(GeyserSession session) {
+        prepareDimension(session, session.getDimensionType());
     }
 }
