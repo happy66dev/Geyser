@@ -320,17 +320,35 @@ public class LivingEntity extends Entity implements Tickable {
     }
 
     public @Nullable Vector3i setBedPosition(EntityMetadata<Optional<Vector3i>, ?> entityMetadata) {
-        Optional<Vector3i> optionalPos = entityMetadata.getValue();
-        if (optionalPos.isPresent()) {
-            Vector3i bedPosition = optionalPos.get();
-            metadata.put(EntityDataTypes.BED_POSITION, bedPosition);
-            // Required to sync position of entity to bed
-            // 1.21.11 MojMap see LivingEntity#setPosToBed
-            this.setPosition(bedPosition.toFloat().add(0.5, 0.6875, 0.5));
-            return bedPosition;
-        } else {
-            return null;
+        // 从 Java metadata 读取尚未映射的真实床方块坐标喵~
+        Optional<Vector3i> optionalPosition = entityMetadata.getValue();
+        // 有效床位需要转换为 Bedrock 客户端正在使用的高度坐标系喵~
+        if (optionalPosition.isPresent()) {
+            // 保留 Java 坐标作为正向映射的唯一输入，避免重复应用高度 offset 喵~
+            Vector3i javaBedPosition = optionalPosition.get();
+            // 喵~防御：将床位限制在 Bedrock 已声明的高度窗口，避免客户端接收越界 BED_POSITION 喵~
+            Vector3i bedrockBedPosition = session.mapPosition(javaBedPosition);
+            // 向 Bedrock 发送映射后的床方块坐标以触发正确睡眠动画喵~
+            metadata.put(EntityDataTypes.BED_POSITION, bedrockBedPosition);
+            // 内部实体位置保存 Bedrock 坐标，确保后续睡眠 offset 与实体移动坐标一致喵~
+            this.setPosition(bedrockBedPosition.toFloat().add(0.5, 0.6875, 0.5));
+            // 返回 Bedrock 坐标供玩家实体缓存，避免睡眠状态混用两个坐标系喵~
+            return bedrockBedPosition;
         }
+        // 没有床位 metadata 时统一清除残留的 Bedrock 睡眠状态喵~
+        clearBedPosition();
+        // 用 null 表示 Java 服务端已移除床位关联喵~
+        return null;
+    }
+
+    /**
+     * 清除 Bedrock 睡眠 metadata，但不猜测 Java 服务端权威的起床位置喵~
+     */
+    public void clearBedPosition() {
+        // 以可序列化的占位坐标覆盖旧床位，避免 ConcurrentHashMap 无法存储 null 喵~
+        metadata.put(EntityDataTypes.BED_POSITION, Vector3i.ZERO);
+        // 清除睡眠 flag，使 LEAVE_BED 与 empty metadata 任意顺序都能收敛喵~
+        setFlag(EntityFlag.SLEEPING, false);
     }
 
     protected boolean hasEnderEye(boolean offhand) {

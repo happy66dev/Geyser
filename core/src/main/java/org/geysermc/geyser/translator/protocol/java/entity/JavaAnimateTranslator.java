@@ -104,9 +104,14 @@ public class JavaAnimateTranslator extends PacketTranslator<ClientboundAnimatePa
                 session.sendUpstreamPacket(stringPacket);
             }
             case LEAVE_BED -> {
-                // Technically the client does a bunch more here, like figuring out the correct bed position
-                // However, we only adjust the pose - that way we stop applying the sleeping offset for the player position
-                session.getPlayerEntity().setPose(Pose.STANDING);
+                // 收敛实际动画实体的床位状态，避免仅处理本地玩家而遗留其他实体睡眠 metadata 喵~
+                if (entity instanceof LivingEntity livingEntity) {
+                    // LEAVE_BED 与空床位 metadata 的到达顺序不固定，此调用可安全重复执行喵~
+                    livingEntity.clearBedPosition();
+                }
+                // 离床后恢复实体站立 pose，停止使用睡眠时的实体 offset 喵~
+                entity.setPose(Pose.STANDING);
+                // 向 Bedrock 播放现有起床动画喵~
                 animatePacket.setAction(AnimatePacket.Action.WAKE_UP);
             }
             default -> {

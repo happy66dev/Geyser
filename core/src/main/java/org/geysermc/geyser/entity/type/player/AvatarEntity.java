@@ -189,18 +189,29 @@ public abstract class AvatarEntity extends LivingEntity {
 
     @Override
     public @Nullable Vector3i setBedPosition(EntityMetadata<Optional<Vector3i>, ?> entityMetadata) {
+        // 基类会将 Java 床位映射为 Bedrock 坐标，并在空值时清除通用睡眠状态喵~
         bedPosition = super.setBedPosition(entityMetadata);
+        // 有床位时让 Bedrock 玩家进入睡眠循环喵~
         if (bedPosition != null) {
-            // Indicate that the player should enter the sleep cycle
             // Has to be a byte or it does not work
             // (Bed position is what actually triggers sleep - "pose" is only optional)
             metadata.put(EntityDataTypes.PLAYER_FLAGS, (byte) 2);
         } else {
-            // Player is no longer sleeping
+            // 玩家已离床时明确停止 Bedrock 睡眠循环喵~
             metadata.put(EntityDataTypes.PLAYER_FLAGS, (byte) 0);
             return null;
         }
         return bedPosition;
+    }
+
+    @Override
+    public void clearBedPosition() {
+        // 先清空玩家缓存，避免睡眠 offset 继续使用过期床位喵~
+        bedPosition = null;
+        // 向 Bedrock 明确结束玩家专用睡眠循环喵~
+        metadata.put(EntityDataTypes.PLAYER_FLAGS, (byte) 0);
+        // 复用通用实体的床位 metadata 与睡眠 flag 清理逻辑喵~
+        super.clearBedPosition();
     }
 
     public void setSkin(ResolvableProfile profile) {
