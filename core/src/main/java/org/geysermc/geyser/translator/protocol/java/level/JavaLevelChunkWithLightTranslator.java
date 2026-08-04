@@ -128,22 +128,37 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
 
         try {
             ByteBuf in = Unpooled.wrappedBuffer(packet.getChunkData());
+            long javaDataReadStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
             for (int sectionY = 0; sectionY < chunkSize; sectionY++) {
                 ChunkSection javaSection = MinecraftTypes.readChunkSection(in, BlockRegistries.BLOCK_STATES.get().size(),
                     session.getRegistryCache().registry(JavaRegistries.BIOME).size());
+                if (timingDiagnostics.enabled()) {
+                    timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_JAVA_DATA_READ,
+                        System.nanoTime() - javaDataReadStartNanos);
+                    javaDataReadStartNanos = System.nanoTime();
+                }
                 javaChunks[sectionY] = javaSection.getBlockData();
                 javaBiomes[sectionY] = javaSection.getBiomeData();
+                long sectionBlockConversionStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
 
                 int bedrockSectionY = sectionY + sectionCountDiff;
                 // 使用顶部已缓存的 mappingOffset，避免重复调用方法链喵~
                 int subChunkIndex = sectionY + yOffset + (mappingOffset >> 4);
                 if (bedrockSectionY < 0 || maxBedrockSectionY < bedrockSectionY) {
                     // Ignore this chunk section since it goes outside the bounds accepted by the Bedrock client
+                    if (timingDiagnostics.enabled()) {
+                        timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_SECTION_BLOCK_CONVERSION,
+                            System.nanoTime() - sectionBlockConversionStartNanos);
+                    }
                     continue;
                 }
 
                 // No need to encode an empty section...
                 if (javaSection.isBlockCountEmpty()) {
+                    if (timingDiagnostics.enabled()) {
+                        timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_SECTION_BLOCK_CONVERSION,
+                            System.nanoTime() - sectionBlockConversionStartNanos);
+                    }
                     continue;
                 }
 
@@ -173,6 +188,10 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                         }
                     }
                     sections[bedrockSectionY] = section;
+                    if (timingDiagnostics.enabled()) {
+                        timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_SECTION_BLOCK_CONVERSION,
+                            System.nanoTime() - sectionBlockConversionStartNanos);
+                    }
                     continue;
                 }
 
@@ -187,6 +206,10 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                         sections[bedrockSectionY] = new GeyserChunkSection(new BlockStorage[] {blockStorage, waterlogged}, subChunkIndex);
                     } else {
                         sections[bedrockSectionY] = new GeyserChunkSection(new BlockStorage[] {blockStorage}, subChunkIndex);
+                    }
+                    if (timingDiagnostics.enabled()) {
+                        timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_SECTION_BLOCK_CONVERSION,
+                            System.nanoTime() - sectionBlockConversionStartNanos);
                     }
                     // If a chunk contains all of the same piston or flower pot then god help us
                     continue;
@@ -273,6 +296,10 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                 }
 
                 sections[bedrockSectionY] = new GeyserChunkSection(layers, subChunkIndex);
+                if (timingDiagnostics.enabled()) {
+                    timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_SECTION_BLOCK_CONVERSION,
+                        System.nanoTime() - sectionBlockConversionStartNanos);
+                }
             }
 
             if (!session.getErosionHandler().isActive()) {
@@ -281,6 +308,7 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
 
             final int chunkBlockX = packet.getX() << 4;
             final int chunkBlockZ = packet.getZ() << 4;
+            long blockEntityTranslationStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
             for (BlockEntityInfo blockEntity : blockEntities) {
                 BlockEntityType type = blockEntity.getType();
                 NbtMap tag = blockEntity.getNbt();
@@ -307,6 +335,7 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                     bedrockBlockEntities.add(blockEntityTranslator.getBlockEntityTag(session, type, x + chunkBlockX, y + mappingOffset, z + chunkBlockZ, tag, blockState));
 
                     // Check for custom skulls
+                    long skullTranslationStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
                     if (session.getPreferencesCache().showCustomSkulls() && type == BlockEntityType.SKULL && tag != null && tag.containsKey("profile")) {
                         BlockDefinition blockDefinition = SkullBlockEntityTranslator.translateSkull(session, tag, Vector3i.from(x + chunkBlockX, y + mappingOffset, z + chunkBlockZ), blockState);
                         if (blockDefinition != null) {
@@ -325,7 +354,15 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                             }
                         }
                     }
+                    if (timingDiagnostics.enabled()) {
+                        timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_SKULL_TRANSLATION,
+                            System.nanoTime() - skullTranslationStartNanos);
+                    }
                 }
+            }
+            if (timingDiagnostics.enabled()) {
+                timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_BLOCK_ENTITY_TRANSLATION,
+                    System.nanoTime() - blockEntityTranslationStartNanos);
             }
 
             // Find highest section
@@ -339,6 +376,7 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
             int biomeCount = bedrockDimension.height() >> 4;
 
             // Estimate chunk size
+            long payloadEstimateStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
             int size = 0;
             for (int i = 0; i < sectionCount; i++) {
                 GeyserChunkSection section = sections[i];
@@ -351,9 +389,14 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
             size += ChunkUtils.EMPTY_BIOME_DATA.length * biomeCount;
             size += 1; // Border blocks
             size += bedrockBlockEntities.size() * 64; // Conservative estimate of 64 bytes per tile entity
+            if (timingDiagnostics.enabled()) {
+                timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_PAYLOAD_ESTIMATE,
+                    System.nanoTime() - payloadEstimateStartNanos);
+            }
 
             // Allocate output buffer
             byteBuf = Unpooled.buffer(size);
+            long payloadEncodingStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
             long sectionEncodingStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
             for (int i = 0; i < sectionCount; i++) {
                 GeyserChunkSection section = sections[i];
@@ -390,6 +433,11 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
 
                 // 发送与当前 Bedrock Section 对齐的 Java biome 数据喵~
                 BiomeTranslator.toNewBedrockBiome(session, javaBiomes[javaBiomeSectionIndex]).writeToNetwork(byteBuf);
+            }
+
+            if (timingDiagnostics.enabled()) {
+                timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_PAYLOAD_ENCODING,
+                    System.nanoTime() - payloadEncodingStartNanos);
             }
 
             byteBuf.writeByte(0); // Border blocks - Edu edition only
@@ -429,6 +477,7 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
             }
         }
 
+        long itemFrameScanStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
         for (Map.Entry<Vector3i, ItemFrameEntity> entry : session.getItemFrameCache().entrySet()) {
             Vector3i position = entry.getKey();
             if ((position.getX() >> 4) == packet.getX() && (position.getZ() >> 4) == packet.getZ()) {
@@ -436,6 +485,10 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                 //TODO optimize
                 entry.getValue().updateBlock(true);
             }
+        }
+        if (timingDiagnostics.enabled()) {
+            timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_ITEM_FRAME_SCAN,
+                System.nanoTime() - itemFrameScanStartNanos);
         }
     }
 }

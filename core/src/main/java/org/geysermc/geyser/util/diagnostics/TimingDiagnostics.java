@@ -32,6 +32,13 @@ public final class TimingDiagnostics {
     /** 固定指标名称，避免运行时按动态字符串分配统计键喵~ */
     public enum Metric {
         CHUNK_CONVERSION,
+        CHUNK_JAVA_DATA_READ,
+        CHUNK_SECTION_BLOCK_CONVERSION,
+        CHUNK_BLOCK_ENTITY_TRANSLATION,
+        CHUNK_SKULL_TRANSLATION,
+        CHUNK_ITEM_FRAME_SCAN,
+        CHUNK_PAYLOAD_ESTIMATE,
+        CHUNK_PAYLOAD_ENCODING,
         CHUNK_SECTION_ENCODING,
         MESSAGE_TRANSLATION,
         HEIGHT_MAPPING,
