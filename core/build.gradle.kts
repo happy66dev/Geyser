@@ -94,6 +94,10 @@ dependencies {
     api(libs.bstats)
 }
 
+tasks.test {
+    useJUnitPlatform()
+}
+
 abstract class CommitMessageValueSource : RepositoryValueSource.Parameterless<String>() {
     override fun obtain(repository: Git): String? {
         val headCommitId = repository.repository.resolve("HEAD")
