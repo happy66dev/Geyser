@@ -57,6 +57,7 @@ import org.geysermc.geyser.command.defaults.QuickActionsCommand;
 import org.geysermc.geyser.command.defaults.ReloadCommand;
 import org.geysermc.geyser.command.defaults.SettingsCommand;
 import org.geysermc.geyser.command.defaults.StatisticsCommand;
+import org.geysermc.geyser.command.defaults.TimingCommand;
 import org.geysermc.geyser.command.defaults.StopCommand;
 import org.geysermc.geyser.command.defaults.VersionCommand;
 import org.geysermc.geyser.event.type.GeyserDefineCommandsEventImpl;
@@ -165,6 +166,7 @@ public class CommandRegistry implements EventRegistrar {
         registerBuiltInCommand(new VersionCommand(geyser, "version", "geyser.commands.version.desc", "geyser.command.version"));
         registerBuiltInCommand(new SettingsCommand("settings", "geyser.commands.settings.desc", "geyser.command.settings"));
         registerBuiltInCommand(new StatisticsCommand("statistics", "geyser.commands.statistics.desc", "geyser.command.statistics"));
+        registerBuiltInCommand(new TimingCommand(geyser, "timing", "geyser.commands.timing.desc", "geyser.command.timing"));
         registerBuiltInCommand(new AdvancementsCommand("advancements", "geyser.commands.advancements.desc", "geyser.command.advancements"));
         registerBuiltInCommand(new AdvancedTooltipsCommand("tooltips", "geyser.commands.advancedtooltips.desc", "geyser.command.tooltips"));
         registerBuiltInCommand(new ConnectionTestCommand(geyser, "connectiontest", "geyser.commands.connectiontest.desc", "geyser.command.connectiontest"));

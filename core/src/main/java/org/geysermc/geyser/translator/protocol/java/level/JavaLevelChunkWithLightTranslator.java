@@ -59,6 +59,7 @@ import org.geysermc.geyser.translator.protocol.PacketTranslator;
 import org.geysermc.geyser.translator.protocol.Translator;
 import org.geysermc.geyser.util.BlockEntityUtils;
 import org.geysermc.geyser.util.ChunkUtils;
+import org.geysermc.geyser.util.diagnostics.TimingDiagnostics;
 import org.geysermc.mcprotocollib.protocol.codec.MinecraftTypes;
 import org.geysermc.mcprotocollib.protocol.data.game.chunk.BitStorage;
 import org.geysermc.mcprotocollib.protocol.data.game.chunk.ChunkSection;
@@ -84,6 +85,18 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
 
     @Override
     public void translate(GeyserSession session, ClientboundLevelChunkWithLightPacket packet) {
+        TimingDiagnostics timingDiagnostics = session.getGeyser().getTimingDiagnostics();
+        long conversionStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
+        try {
+            translateChunk(session, packet, timingDiagnostics);
+        } finally {
+            if (timingDiagnostics.enabled()) {
+                timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_CONVERSION, System.nanoTime() - conversionStartNanos);
+            }
+        }
+    }
+
+    private void translateChunk(GeyserSession session, ClientboundLevelChunkWithLightPacket packet, TimingDiagnostics timingDiagnostics) {
         if (session.isSpawned()) {
             ChunkUtils.updateChunkPosition(session, session.getPlayerEntity().position().toInt());
         }

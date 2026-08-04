@@ -110,6 +110,9 @@ max-players: 99
 # If debug messages should be sent through console
 debug-mode: true
 
+# Whether performance timing and memory diagnostics should be collected independently from debug-mode
+debug-timing: true
+
 # Allow a fake cooldown indicator to be sent. Bedrock players otherwise do not see a cooldown as they still use 1.8 combat.
 # Please note: if the cooldown is enabled, some users may see a black box during the cooldown sequence, like below:
 # https://cdn.discordapp.com/attachments/613170125696270357/957075682230419466/Screenshot_from_2022-03-25_20-35-08.png

@@ -107,6 +107,8 @@ import org.geysermc.geyser.util.AssetUtils;
 import org.geysermc.geyser.util.CodeOfConductManager;
 import org.geysermc.geyser.util.InternalPlatformType;
 import org.geysermc.geyser.util.JsonUtils;
+import org.geysermc.geyser.util.diagnostics.MemoryReport;
+import org.geysermc.geyser.util.diagnostics.TimingDiagnostics;
 import org.geysermc.geyser.util.NewsHandler;
 import org.geysermc.geyser.util.VersionCheckUtils;
 import org.geysermc.geyser.util.WebUtils;
@@ -171,6 +173,8 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
     private volatile boolean shuttingDown = false;
 
     private ScheduledExecutorService scheduledThread;
+
+    private TimingDiagnostics timingDiagnostics;
 
     private ScoreboardUpdater scoreboardUpdater;
 
@@ -306,6 +310,15 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
 
     private void startInstance() {
         this.scheduledThread = Executors.newSingleThreadScheduledExecutor(new DefaultThreadFactory("Geyser Scheduled Thread"));
+
+        this.timingDiagnostics = new TimingDiagnostics(config().debugTiming());
+        if (this.timingDiagnostics.enabled()) {
+            scheduledThread.scheduleAtFixedRate(() -> {
+                TimingDiagnostics.Snapshot timingSnapshot = timingDiagnostics.snapshotAndReset();
+                MemoryReport memoryReport = MemoryReport.capture();
+                getLogger().info("[timing] " + timingSnapshot.format() + " " + memoryReport.format());
+            }, 60, 60, java.util.concurrent.TimeUnit.SECONDS);
+        }
 
         if (isReloading) {
             // If we're reloading, the default locale in the config might have changed.
@@ -599,6 +612,7 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
         }
 
         runIfNonNull(metrics, MetricsBase::shutdown);
+        runIfNonNull(timingDiagnostics, diagnostics -> diagnostics.setEnabled(false));
         runIfNonNull(scheduledThread, ScheduledExecutorService::shutdown);
         runIfNonNull(scoreboardUpdater, ScoreboardUpdater::shutdown);
         runIfNonNull(geyserServer, GeyserServer::shutdown);

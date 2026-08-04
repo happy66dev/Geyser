@@ -191,6 +191,7 @@ public class ConfigLoaderTest {
         assertEquals(111, config.pendingAuthenticationTimeout());
         assertEquals(List.of("ThisExampleUsername", "ThisOther"), config.savedUserLogins());
         assertTrue(config.debugMode());
+        assertTrue(config.debugTiming());
 
         // Verify metrics
         assertFalse(config.enableMetrics());

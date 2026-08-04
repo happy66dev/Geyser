@@ -117,6 +117,10 @@ public interface GeyserConfig {
     @Comment("If debug messages should be sent through console")
     boolean debugMode();
 
+    @Comment("Whether performance timing and memory diagnostics should be collected independently from debug-mode")
+    @DefaultBoolean(false)
+    boolean debugTiming();
+
     @Comment("Do not change!")
     @SuppressWarnings("unused")
     default int configVersion() {

@@ -203,6 +203,7 @@ import org.geysermc.geyser.util.EntityUtils;
 import org.geysermc.geyser.util.InventoryUtils;
 import org.geysermc.geyser.util.LoginEncryptionUtils;
 import org.geysermc.geyser.util.MathUtils;
+import org.geysermc.geyser.util.diagnostics.TimingDiagnostics;
 import org.geysermc.mcprotocollib.auth.GameProfile;
 import org.geysermc.mcprotocollib.network.BuiltinFlags;
 import org.geysermc.mcprotocollib.network.ClientSession;
@@ -2758,11 +2759,23 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
     }
 
     public Vector3f mapPosition(Vector3f pos) {
-        return worldHeightMapper.mapPosition(pos);
+        TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
+        long mappingStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
+        Vector3f mappedPosition = worldHeightMapper.mapPosition(pos);
+        if (timingDiagnostics != null && timingDiagnostics.enabled()) {
+            timingDiagnostics.record(TimingDiagnostics.Metric.HEIGHT_MAPPING, System.nanoTime() - mappingStartNanos);
+        }
+        return mappedPosition;
     }
 
     public Vector3i mapPosition(Vector3i pos) {
-        return worldHeightMapper.mapPosition(pos);
+        TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
+        long mappingStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
+        Vector3i mappedPosition = worldHeightMapper.mapPosition(pos);
+        if (timingDiagnostics != null && timingDiagnostics.enabled()) {
+            timingDiagnostics.record(TimingDiagnostics.Metric.HEIGHT_MAPPING, System.nanoTime() - mappingStartNanos);
+        }
+        return mappedPosition;
     }
 
     // 仅加 offset 不 clamp，用于实体/声音/粒子等允许超出维度边界的坐标喵~

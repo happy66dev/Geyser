@@ -50,6 +50,7 @@ import org.geysermc.geyser.text.ChatDecoration;
 import org.geysermc.geyser.text.DummyLegacyHoverEventSerializer;
 import org.geysermc.geyser.text.GeyserLocale;
 import org.geysermc.geyser.text.MinecraftTranslationRegistry;
+import org.geysermc.geyser.util.diagnostics.TimingDiagnostics;
 import org.geysermc.mcprotocollib.protocol.data.DefaultComponentSerializer;
 import org.geysermc.mcprotocollib.protocol.data.game.Holder;
 import org.geysermc.mcprotocollib.protocol.data.game.chat.ChatType;
@@ -205,6 +206,19 @@ public class MessageTranslator {
     }
 
     private static String convertMessage(Component message, String locale, boolean addLeadingResetFormat) {
+        GeyserImpl geyser = GeyserImpl.getInstance();
+        TimingDiagnostics timingDiagnostics = geyser == null ? null : geyser.getTimingDiagnostics();
+        long conversionStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
+        try {
+            return convertMessageInternal(message, locale, addLeadingResetFormat);
+        } finally {
+            if (timingDiagnostics != null && timingDiagnostics.enabled()) {
+                timingDiagnostics.record(TimingDiagnostics.Metric.MESSAGE_TRANSLATION, System.nanoTime() - conversionStartNanos);
+            }
+        }
+    }
+
+    private static String convertMessageInternal(Component message, String locale, boolean addLeadingResetFormat) {
         try {
             // Translate any components that require it
             message = RENDERER.render(message, locale);
