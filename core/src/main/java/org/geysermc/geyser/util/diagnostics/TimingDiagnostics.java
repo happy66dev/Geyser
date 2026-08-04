@@ -35,7 +35,9 @@ public final class TimingDiagnostics {
         CHUNK_SECTION_ENCODING,
         MESSAGE_TRANSLATION,
         HEIGHT_MAPPING,
-        ENTITY_METADATA_TRANSLATION
+        ENTITY_METADATA_TRANSLATION,
+        UPSTREAM_PACKET_SEND,
+        DOWNSTREAM_PACKET_SEND
     }
 
     /** 每个指标的无锁累计器，允许快照在并发写入时保持近似一致喵~ */

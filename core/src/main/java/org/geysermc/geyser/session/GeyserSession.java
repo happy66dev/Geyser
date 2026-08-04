@@ -2134,7 +2134,12 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
      * @param packet the bedrock packet from the Cloudburst protocol lib
      */
     public void sendUpstreamPacket(BedrockPacket packet) {
+        TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
+        long sendStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
         upstream.sendPacket(packet);
+        if (timingDiagnostics != null && timingDiagnostics.enabled()) {
+            timingDiagnostics.record(TimingDiagnostics.Metric.UPSTREAM_PACKET_SEND, System.nanoTime() - sendStartNanos);
+        }
     }
 
     /**
@@ -2143,7 +2148,12 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
      * @param packet the bedrock packet from the Cloudburst protocol lib
      */
     public void sendUpstreamPacketImmediately(BedrockPacket packet) {
+        TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
+        long sendStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
         upstream.sendPacketImmediately(packet);
+        if (timingDiagnostics != null && timingDiagnostics.enabled()) {
+            timingDiagnostics.record(TimingDiagnostics.Metric.UPSTREAM_PACKET_SEND, System.nanoTime() - sendStartNanos);
+        }
     }
 
     /**
@@ -2790,7 +2800,13 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
 
     // 仅加 offset 不 clamp，Vector3f 版本喵~
     public Vector3f mapPositionUnclamped(Vector3f pos) {
-        return worldHeightMapper.mapPositionUnclamped(pos);
+        TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
+        long mappingStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
+        Vector3f mappedPosition = worldHeightMapper.mapPositionUnclamped(pos);
+        if (timingDiagnostics != null && timingDiagnostics.enabled()) {
+            timingDiagnostics.record(TimingDiagnostics.Metric.HEIGHT_MAPPING, System.nanoTime() - mappingStartNanos);
+        }
+        return mappedPosition;
     }
 
     public int inverseMapY(int bedrockY) {
@@ -2806,10 +2822,22 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
     }
 
     public Vector3f inverseMapPosition(Vector3f pos) {
-        return worldHeightMapper.inverseMapPosition(pos);
+        TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
+        long mappingStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
+        Vector3f mappedPosition = worldHeightMapper.inverseMapPosition(pos);
+        if (timingDiagnostics != null && timingDiagnostics.enabled()) {
+            timingDiagnostics.record(TimingDiagnostics.Metric.HEIGHT_MAPPING, System.nanoTime() - mappingStartNanos);
+        }
+        return mappedPosition;
     }
 
     public Vector3i inverseMapPosition(Vector3i pos) {
-        return worldHeightMapper.inverseMapPosition(pos);
+        TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
+        long mappingStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
+        Vector3i mappedPosition = worldHeightMapper.inverseMapPosition(pos);
+        if (timingDiagnostics != null && timingDiagnostics.enabled()) {
+            timingDiagnostics.record(TimingDiagnostics.Metric.HEIGHT_MAPPING, System.nanoTime() - mappingStartNanos);
+        }
+        return mappedPosition;
     }
 }

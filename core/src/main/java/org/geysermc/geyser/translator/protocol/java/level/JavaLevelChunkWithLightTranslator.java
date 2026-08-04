@@ -354,6 +354,7 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
 
             // Allocate output buffer
             byteBuf = Unpooled.buffer(size);
+            long sectionEncodingStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
             for (int i = 0; i < sectionCount; i++) {
                 GeyserChunkSection section = sections[i];
                 if (section != null) {
@@ -362,6 +363,9 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                     int subChunkIndex = (i + (bedrockDimension.minY() >> 4));
                     new GeyserChunkSection(EMPTY_BLOCK_STORAGE, subChunkIndex).writeToNetwork(byteBuf);
                 }
+            }
+            if (timingDiagnostics.enabled()) {
+                timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_SECTION_ENCODING, System.nanoTime() - sectionEncodingStartNanos);
             }
 
             // Bedrock biome Section 的起点，单位：16 格 Section喵~
