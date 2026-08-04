@@ -2232,7 +2232,12 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
         ProtocolState state = protocol.getOutboundState();
         if (state == ProtocolState.GAME || state == ProtocolState.CONFIGURATION || packet.getClass() == ServerboundCustomQueryAnswerPacket.class
             || packet.getClass() == ServerboundCookieResponsePacket.class) {
+            TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
+            long sendStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
             downstream.sendPacket(packet);
+            if (timingDiagnostics != null && timingDiagnostics.enabled()) {
+                timingDiagnostics.record(TimingDiagnostics.Metric.DOWNSTREAM_PACKET_SEND, System.nanoTime() - sendStartNanos);
+            }
         } else {
             geyser.getLogger().debug("Tried to send downstream packet " + packet.getClass().getSimpleName() + " before connected to the server");
         }
