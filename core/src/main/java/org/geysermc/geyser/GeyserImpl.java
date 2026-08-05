@@ -313,12 +313,12 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
 
         this.timingDiagnostics = new TimingDiagnostics(config().debugTiming());
         if (this.timingDiagnostics.enabled()) {
-            getLogger().info("[timing] diagnostics enabled; reports are emitted every 60 seconds");
+            getLogger().info("[timing] diagnostics enabled; reports are emitted every 10 seconds");
             scheduledThread.scheduleAtFixedRate(() -> {
                 TimingDiagnostics.Snapshot timingSnapshot = timingDiagnostics.snapshotAndReset();
                 MemoryReport memoryReport = MemoryReport.capture();
                 getLogger().info("[timing] " + timingSnapshot.format() + " " + memoryReport.format());
-            }, 60, 60, java.util.concurrent.TimeUnit.SECONDS);
+            }, 10, 10, java.util.concurrent.TimeUnit.SECONDS);
         }
 
         if (isReloading) {
