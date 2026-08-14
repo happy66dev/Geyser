@@ -74,13 +74,32 @@ public class CollisionRegistryLoader extends MultiResourceRegistryLoader<String,
         try (InputStream stream = GeyserImpl.getInstance().getBootstrap().getResourceOrThrow(input.value())) {
             NbtMap collisionData = (NbtMap) NbtUtils.createGZIPReader(stream).readTag();
             indices = collisionData.getIntArray("indices");
-            //SuppressWarnings unchecked
-            collisionList = loadBoundingBoxes(collisionData.getList("shapes", NbtType.LIST));
+            // 优先读取新 mappings-generator 生成的 shapes 字段，兼容当前资源 schema 喵~
+            List<NbtList> collisionNodes = collisionData.getList("shapes", NbtType.LIST);
+            // 喵~防御：旧版映射使用 collisions 字段，避免空列表导致启动时索引越界喵~
+            if (collisionNodes.isEmpty() && collisionData.containsKey("collisions")) {
+                collisionNodes = collisionData.getList("collisions", NbtType.LIST);
+            }
+            collisionList = loadBoundingBoxes(collisionNodes);
         } catch (Exception e) {
             throw new AssertionError("Unable to load collision data", e);
         }
 
         List<BlockState> blockStates = BlockRegistries.BLOCK_STATES.get();
+        if (indices.length != blockStates.size()) {
+            throw new IllegalStateException("Collision data indices length " + indices.length
+                    + " does not match block state count " + blockStates.size());
+        }
+        for (int blockStateId = 0; blockStateId < indices.length; blockStateId++) {
+            int collisionIndex = indices[blockStateId];
+            if (collisionIndex >= 2 && collisionIndex >= collisionList.size()) {
+                BlockState blockState = blockStates.get(blockStateId);
+                String identifier = blockState == null ? "<missing>" : blockState.block().javaIdentifier().value();
+                throw new IllegalStateException("Collision data index " + collisionIndex + " for block state "
+                        + blockStateId + " (" + identifier + ") exceeds " + collisionList.size() + " shapes");
+            }
+        }
+
         var collisions = new ObjectArrayList<BlockCollision>(blockStates.size());
 
         // Map of unique collisions to its instance
