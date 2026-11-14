@@ -487,9 +487,14 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
         }
 
         long itemFrameScanStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
+        // 展示框缓存以 Bedrock 坐标作 key，而 packet 的区块索引是 Java 坐标，两边必须先换算到同一空间喵~
+        // 喵~防御：直接比较会让两个坐标系相减，带水平映射时永远不相等，
+        // 展示框就不会随着区块重新下发而刷新，区块重传后客户端上的展示框会消失喵~
+        int[] bedrockChunkCoordinatesForItemFrames = session.mapChunkCoordinates(packet.getX(), packet.getZ());
         for (Map.Entry<Vector3i, ItemFrameEntity> entry : session.getItemFrameCache().entrySet()) {
             Vector3i position = entry.getKey();
-            if ((position.getX() >> 4) == packet.getX() && (position.getZ() >> 4) == packet.getZ()) {
+            if ((position.getX() >> 4) == bedrockChunkCoordinatesForItemFrames[0]
+                && (position.getZ() >> 4) == bedrockChunkCoordinatesForItemFrames[1]) {
                 // Update this item frame so it doesn't get lost in the abyss
                 //TODO optimize
                 entry.getValue().updateBlock(true);

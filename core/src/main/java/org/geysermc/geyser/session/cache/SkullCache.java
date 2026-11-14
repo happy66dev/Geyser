@@ -26,9 +26,8 @@
 package org.geysermc.geyser.session.cache;
 
 import it.unimi.dsi.fastutil.objects.Object2ObjectOpenHashMap;
-import lombok.Data;
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.cloudburstmc.math.vector.Vector3f;
 import org.cloudburstmc.math.vector.Vector3i;
@@ -261,12 +260,17 @@ public class SkullCache {
         List<Map.Entry<Vector3i, Skull>> snapshot = new ArrayList<>(skulls.entrySet());
         skulls.clear();
 
+        // 实体与展示框都用 Bedrock 坐标平移；这里必须与 HorizontalOffsetRelocator 的 delta 朝向一致喵~
         Vector3i integerDelta = delta.toInt();
         for (Map.Entry<Vector3i, Skull> entry : snapshot) {
             // 用新的方块坐标作为 key 重新塞回表里喵~
             Vector3i newPosition = entry.getKey().add(integerDelta);
             Skull skull = entry.getValue();
             skulls.put(newPosition, skull);
+            // Skull 内部也存了一份坐标，距离剔除与后续移除都用它，必须同步更新喵~
+            // 喵~防御：若漏掉这一步，updateVisibleSkulls 会拿旧坐标算距离，
+            // 重定位后所有头的可见性判断都会错位喵~
+            skull.setPosition(newPosition);
             // 装饰实体本身也要跟着搬，否则它仍渲染在旧坐标系的位置上喵~
             if (skull.entity != null) {
                 skull.entity.setPosition(skull.entity.position().add(delta));
@@ -275,7 +279,16 @@ public class SkullCache {
 
         // 距离剔除列表依赖玩家位置，搬完后必须重算一次，否则会按旧坐标判断可见性喵~
         inRangeSkulls.clear();
-        totalSkullEntities = 0;
+        // 喵~防御：不能直接把计数器清零！已存在的头颅实体并没有被回收，
+        // 清零会让 assignSkullEntity 以为还有名额，于是重复创建实体造成内存与网络包泄漏喵~
+        // 这里改为按实际仍持有实体的头颅重新统计一次，保证计数与真实情况一致喵~
+        int liveSkullEntityCount = 0;
+        for (Skull skull : skulls.values()) {
+            if (skull.entity != null) {
+                liveSkullEntityCount++;
+            }
+        }
+        totalSkullEntities = liveSkullEntityCount;
         lastPlayerPosition = null;
     }
 
@@ -298,8 +311,8 @@ public class SkullCache {
         return null;
     }
 
-    @RequiredArgsConstructor
-    @Data
+    @Getter
+    @Setter
     public static class Skull {
         private UUID uuid;
         private String skinHash;
@@ -309,7 +322,27 @@ public class SkullCache {
         private BlockDefinition blockDefinition;
         private SkullPlayerEntity entity;
 
-        private final Vector3i position;
+        /**
+         * 头颅所在的 Bedrock 方块坐标喵~
+         * <p>
+         * 不能是 final：水平坐标映射切换 offset 时整个客户端世界都会平移，
+         * {@link SkullCache#relocateBy(org.cloudburstmc.math.vector.Vector3f)} 必须同步更新这个坐标，
+         * 否则距离剔除与按位置移除都会按旧坐标判断，重定位后头颅会莫名消失或残留喵~
+         */
+        private Vector3i position;
         private int distanceSquared;
+
+        /**
+         * 显式构造器，供 <code>skulls.computeIfAbsent</code> 的方法引用与 lambda 使用喵~
+         * <p>
+         * 去掉 lombok 的 {@code @RequiredArgsConstructor} 是因为 position 不再是 final 字段，
+         * 生成不出只接收 position 的构造器，这里直接手写一个语义完全一致的版本喵~
+         *
+         * @param position 头颅所在的 Bedrock 方块坐标，不能为 null
+         */
+        public Skull(Vector3i position) {
+            // 喵~防御：坐标缺失时用原点占位，避免后续 distanceSquared 计算直接空指针喵~
+            this.position = position == null ? Vector3i.ZERO : position;
+        }
     }
 }

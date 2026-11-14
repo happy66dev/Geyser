@@ -337,6 +337,12 @@ public final class HorizontalOffsetRelocator {
             if (entity == player) {
                 continue;
             }
+            // 展示框必须跳过：它把坐标缓存在自己内部，并且用 bedrockPosition 当作
+            // itemFrameCache 的 key。走通用的 despawn + spawn 会先把缓存条目删掉、
+            // 再以旧坐标重新发包，缓存就永久丢失了喵~ 它由 relocateItemFrames 单独处理喵~
+            if (entity instanceof ItemFrameEntity) {
+                continue;
+            }
             // 喵~防御：只重建原本已经生成过的实体；未生成过的实体调 spawnEntity 会多发一个生成包，
             // 客户端就会出现服务端永远不会移除的幽灵实体喵~
             if (!entity.isValid()) {

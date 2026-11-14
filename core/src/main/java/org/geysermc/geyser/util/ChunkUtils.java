@@ -132,11 +132,16 @@ public class ChunkUtils {
      * adds that block to the cache.
      * @param session the Bedrock session to send/register the block to
      * @param blockState the Java block state of the block
-     * @param position the position of the block
+     * @param bedrockPosition the position of the block, in Bedrock (client-facing) coordinates
      */
-    public static void updateBlock(GeyserSession session, int blockState, Vector3i position) {
-        updateBlockClientSide(session, BlockState.of(blockState), position);
-        session.getChunkCache().updateBlock(position.getX(), position.getY(), position.getZ(), blockState);
+    public static void updateBlock(GeyserSession session, int blockState, Vector3i bedrockPosition) {
+        // 客户端只认得 Bedrock 坐标系，发包与方块实体 NBT 都必须用原样传入的坐标喵~
+        updateBlockClientSide(session, BlockState.of(blockState), bedrockPosition);
+        // ChunkCache 的区块索引是按 Java 区块坐标建立的，写入前必须把 Bedrock 坐标还原成 Java 坐标喵~
+        // 喵~防御：若不还原，带水平 offset 时 x>>4 会落到一个不存在的区块，
+        // ChunkCache.updateBlock 拿到 null 调色板后静默丢弃，真区块就永远停在旧方块状态了喵~
+        Vector3i javaPosition = session.inverseMapPosition(bedrockPosition);
+        session.getChunkCache().updateBlock(javaPosition.getX(), javaPosition.getY(), javaPosition.getZ(), blockState);
     }
 
     /**
@@ -144,11 +149,14 @@ public class ChunkUtils {
      * adds that block to the cache.
      * @param session the Bedrock session to send/register the block to
      * @param blockState the Java block state of the block
-     * @param position the position of the block
+     * @param bedrockPosition the position of the block, in Bedrock (client-facing) coordinates
      */
-    public static void updateBlock(GeyserSession session, BlockState blockState, Vector3i position) {
-        updateBlockClientSide(session, blockState, position);
-        session.getChunkCache().updateBlock(position.getX(), position.getY(), position.getZ(), blockState.javaId());
+    public static void updateBlock(GeyserSession session, BlockState blockState, Vector3i bedrockPosition) {
+        // 客户端只认得 Bedrock 坐标系，发包与方块实体 NBT 都必须用原样传入的坐标喵~
+        updateBlockClientSide(session, blockState, bedrockPosition);
+        // 同上面那个重载：写 ChunkCache 之前必须还原成 Java 坐标，否则调色板会被写进错误的区块喵~
+        Vector3i javaPosition = session.inverseMapPosition(bedrockPosition);
+        session.getChunkCache().updateBlock(javaPosition.getX(), javaPosition.getY(), javaPosition.getZ(), blockState.javaId());
     }
 
     /**

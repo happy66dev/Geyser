@@ -75,7 +75,11 @@ public class ChunkCache {
         javaChunkPackets = cache ? new Long2ObjectOpenHashMap<>() : null;
         // 存成 Supplier 而不是构造时取一次快照：配置在运行期可以通过 /geyser reload 修改，
         // 若抓成常量，已登录的玩家必须重连才会生效喵~
-        this.chunkReplaySupplier = () -> session.getGeyser().config().horizontalMappingChunkReplay();
+        // 喵~防御：必须同时看「水平映射总开关」，映射根本没启用的服务器永远不需要重放缓存，
+        // 否则会给每个玩家白白多留几十 MB 内存，这是默认配置下的纯浪费喵~
+        this.chunkReplaySupplier = () ->
+            session.getGeyser().config().horizontalCoordinateMapping()
+                && session.getGeyser().config().horizontalMappingChunkReplay();
     }
 
     /**

@@ -453,15 +453,26 @@ public class CollisionManager {
     }
 
     public boolean isWaterInEyes() {
+        // 玩家包围盒保存在 Bedrock 坐标系里，眼睛位置也是 Bedrock 坐标喵~
         double eyeX = playerBoundingBox.getMiddleX();
         double eyeY = playerBoundingBox.getMiddleY() - playerBoundingBox.getSizeY() / 2d + session.getEyeHeight();
         double eyeZ = playerBoundingBox.getMiddleZ();
 
         eyeY -= 1 / ((double) BlockStateValues.NUM_FLUID_LEVELS); // Subtract the height of one water layer
-        int blockID = session.getGeyser().getWorldManager().getBlockAt(session, GenericMath.floor(eyeX), GenericMath.floor(eyeY), GenericMath.floor(eyeZ));
+        // 方块查询走的是 Java 世界，必须先把眼睛位置还原成 Java 坐标再取方块喵~
+        // 喵~防御：若直接用 Bedrock 坐标查询，带水平映射时眼睛会“看”到另一个区块的方块，
+        // 水面下与水面上的判定就会随机出错（例如水下不憋气、陆地却在冒泡）喵~
+        // 这里必须用浮点版本还原，因为水位比较需要精确的 Y，取整后的 Y 会让判断几乎恒为真喵~
+        Vector3f javaEyePosition = session.inverseMapPosition(Vector3f.from((float) eyeX, (float) eyeY, (float) eyeZ));
+        float javaEyeY = javaEyePosition.getY();
+
+        int blockID = session.getGeyser().getWorldManager().getBlockAt(session,
+            GenericMath.floor(javaEyePosition.getX()), GenericMath.floor(javaEyeY), GenericMath.floor(javaEyePosition.getZ()));
         double waterHeight = BlockStateValues.getWaterHeight(blockID);
 
-        return waterHeight != -1 && eyeY < (Math.floor(eyeY) + waterHeight);
+        // 用精确的 Java 眼睛高度与「所在方块底边 + 水位」比较，语义与原逻辑完全一致喵~
+        // 喵~防御：waterHeight 为 -1 表示这个方块不是流体，直接返回 false 免得算出奇怪结果喵~
+        return waterHeight != -1 && javaEyeY < (Math.floor(javaEyeY) + waterHeight);
     }
 
     /**

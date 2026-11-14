@@ -3038,13 +3038,15 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource, Jav
         if (playerEntity == null) {
             return Vector3d.ZERO;
         }
-        // 先取客户端可见位置（含实体偏移），再走完整反向映射把 X/Y/Z 全部还原喵~
-        Vector3f bedrockPosition = playerEntity.bedrockPosition();
-        // 喵~防御：极端情况下位置可能尚未初始化，null 时同样回退到零向量喵~
-        if (bedrockPosition == null) {
+        // 必须用 position() 而不是 bedrockPosition()：后者对玩家额外加上了 1.62 的实体高度偏移，
+        // 那是给客户端渲染用的，不是玩家真正站立的脚部坐标喵~ 用它会让显示的 Y 永久偏高 1.62 喵~
+        // 喵~防御：极端情况下位置可能尚未初始化，null 时回退到零向量喵~
+        Vector3f playerPosition = playerEntity.position();
+        if (playerPosition == null) {
             return Vector3d.ZERO;
         }
-        return inverseMapPosition(bedrockPosition).toDouble();
+        // 位置本身是 Bedrock 坐标系，直接做完整反向映射即可拿到 Java 三轴真实坐标喵~
+        return inverseMapPosition(playerPosition).toDouble();
     }
 
     /**

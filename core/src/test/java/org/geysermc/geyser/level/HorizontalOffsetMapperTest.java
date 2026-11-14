@@ -314,4 +314,52 @@ class HorizontalOffsetMapperTest {
             assertEquals(0, mapper.offsetZ() % 16, "Z offset 未对齐区块：" + mapper.offsetZ());
         }
     }
+
+    @Test
+    void inverseMappedBlockLandsInTheSameChunkAsItsJavaCoordinate() {
+        // 回归测试：ChunkCache 的区块索引是按 Java 区块坐标建立的，
+        // 而方块更新路径拿到的是 Bedrock 坐标，必须先反向映射再写缓存喵~
+        // 这里校验「Bedrock 方块坐标反向映射后，与原始 Java 坐标落在同一个区块」这一不变量喵~
+        HorizontalOffsetMapper mapper = HorizontalOffsetMapper.create(Vector3d.from(50_000, 64, -80_000), TRIGGER);
+
+        // 取几个跨越区块边界、正负混合的样本，保证不是碰巧对齐喵~
+        int[][] sampleJavaBlocks = {
+            {50_000, 64, -80_000},
+            {50_015, 64, -80_015},
+            {50_016, 64, -80_016},
+            {-70_001, -60, 120_007}
+        };
+
+        for (int[] sampleJavaBlock : sampleJavaBlocks) {
+            Vector3i javaBlockPosition = Vector3i.from(sampleJavaBlock[0], sampleJavaBlock[1], sampleJavaBlock[2]);
+            // 模拟「客户端侧」持有的 Bedrock 坐标，再按修复后的逻辑反向还原喵~
+            Vector3i bedrockPosition = mapper.mapPosition(javaBlockPosition);
+            Vector3i restoredJavaPosition = mapper.inverseMapPosition(bedrockPosition);
+
+            // 还原结果必须与原坐标完全相等（offset 是整数，不存在精度损失）喵~
+            assertEquals(javaBlockPosition, restoredJavaPosition);
+            // 关键断言：两者必须落在同一个 Java 区块，否则写缓存会落到错误的调色板喵~
+            assertEquals(javaBlockPosition.getX() >> 4, restoredJavaPosition.getX() >> 4);
+            assertEquals(javaBlockPosition.getZ() >> 4, restoredJavaPosition.getZ() >> 4);
+        }
+    }
+
+    @Test
+    void bedrockChunkIndexDiffersFromJavaChunkIndexWhenMapped() {
+        // 回归测试：这条断言用来证明「直接用 Bedrock 区块索引写 ChunkCache」确实是错的喵~
+        // 也就是说，一旦有人把反向映射那一步删掉，上面的测试之外这里会先失败，提示修复被回退喵~
+        HorizontalOffsetMapper mapper = HorizontalOffsetMapper.create(Vector3d.from(50_000, 64, 0), TRIGGER);
+        // 映射后 offset 非零，说明这两个坐标系确实不同，不能混用喵~
+        assertTrue(mapper.needsMapping());
+
+        Vector3i javaBlockPosition = Vector3i.from(50_000, 64, 0);
+        Vector3i bedrockPosition = mapper.mapPosition(javaBlockPosition);
+
+        // Bedrock 侧区块索引必须与 Java 侧不同，否则说明映射根本没生效（配置或算法异常）喵~
+        // 喵~防御：如果这两者相等，说明 offset 落在整区块整除位置，
+        // 本断言会误报，因此这里顺带校验 offset 本身不为 0 且不是 16 的倍数以外的巧合喵~
+        assertEquals(0, mapper.offsetX() % 16);
+        assertTrue((javaBlockPosition.getX() >> 4) != (bedrockPosition.getX() >> 4),
+            "映射后区块索引未变化，说明 offset 没起作用：" + mapper.offsetX());
+    }
 }

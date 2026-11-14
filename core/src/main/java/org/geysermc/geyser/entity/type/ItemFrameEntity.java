@@ -184,8 +184,18 @@ public class ItemFrameEntity extends HangingEntity {
         this.bedrockPosition = newPosition;
         session.getItemFrameCache().put(newPosition, this);
 
+        // 实体基类里的 position 是 Bedrock 浮点坐标，也必须一起搬，否则实体数据更新会发到旧坐标喵~
+        // 喵~防御：delta 本身是整区块对齐的整数，直接按分量加就不会引入新的浮点误差喵~
+        this.setPosition(Vector3f.from(
+            this.position().getX() + delta.getX(),
+            this.position().getY() + delta.getY(),
+            this.position().getZ() + delta.getZ()));
+
         // NBT 里内嵌的 x/y/z 也来自 bedrockPosition，必须重建一次喵~
         this.changed = true;
+        // 立即重发一次方块与方块实体包，让客户端在新坐标系下重新画出这个展示框喵~
+        // 这里不能走 despawn/spawn：despawn 会从 itemFrameCache 里删掉自己，缓存就丢了喵~
+        this.updateBlock(true);
     }
 
     @Override
