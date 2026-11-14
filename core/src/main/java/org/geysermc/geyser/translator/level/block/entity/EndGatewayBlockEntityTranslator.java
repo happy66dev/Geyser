@@ -27,6 +27,7 @@ package org.geysermc.geyser.translator.level.block.entity;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.ints.IntList;
+import org.cloudburstmc.math.vector.Vector3i;
 import org.cloudburstmc.nbt.NbtList;
 import org.cloudburstmc.nbt.NbtMap;
 import org.cloudburstmc.nbt.NbtMapBuilder;
@@ -45,9 +46,13 @@ public class EndGatewayBlockEntityTranslator extends BlockEntityTranslator {
         IntList tagsList = new IntArrayList();
         // Yes, the axis letters are capitalized
         NbtMap exitPortal = javaNbt.getCompound("ExitPortal");
-        tagsList.add(exitPortal.getInt("X", 0));
-        tagsList.add(session.mapY(exitPortal.getInt("Y", 0)));
-        tagsList.add(exitPortal.getInt( "Z", 0));
+        // 出口传送门是 Java 坐标系中的方块位置，X/Y/Z 三轴都要映射，
+        // 只映射 Y 会让光束指向几万格之外的错误位置喵~
+        Vector3i bedrockExitPortal = session.mapPosition(
+            Vector3i.from(exitPortal.getInt("X", 0), exitPortal.getInt("Y", 0), exitPortal.getInt("Z", 0)));
+        tagsList.add(bedrockExitPortal.getX());
+        tagsList.add(bedrockExitPortal.getY());
+        tagsList.add(bedrockExitPortal.getZ());
         bedrockNbt.put("ExitPortal", new NbtList<>(NbtType.INT, tagsList));
     }
 }

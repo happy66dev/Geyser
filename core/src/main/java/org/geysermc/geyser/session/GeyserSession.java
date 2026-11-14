@@ -50,7 +50,6 @@ import org.checkerframework.checker.index.qual.Positive;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.checkerframework.common.value.qual.IntRange;
 import org.cloudburstmc.math.vector.Vector2f;
 import org.cloudburstmc.math.vector.Vector2i;
@@ -541,6 +540,12 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource, Jav
     @Setter
     @Getter
     private boolean coordinateBarEnabled = false;
+
+    /** 常驻坐标提示的最小推送间隔，单位：毫秒；约每秒 5 次，人眼够读又不刷屏喵~ */
+    private static final long COORDINATE_BAR_MIN_INTERVAL_MILLIS = 200L;
+
+    /** 上一次推送常驻坐标提示的时间戳，单位：毫秒；用于限制推送频率喵~ */
+    private long lastCoordinateBarUpdateMillis = 0L;
 
     // 仅在 debugMode 时记录已输出的区块高度组合，避免每个区块都重复输出 INFO 日志喵~
     private final Set<String> loggedChunkHeightDiagnostics = new java.util.HashSet<>();
@@ -3013,9 +3018,10 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource, Jav
         }
         // 延迟创建重定位器，未启用水平映射的服务器完全不会分配这个对象喵~
         if (horizontalOffsetRelocator == null) {
+            // 传入 Supplier 而不是当前值：/geyser reload 之后阈值与开关会立即生效，无需玩家重连喵~
             horizontalOffsetRelocator = new HorizontalOffsetRelocator(this,
-                geyser.config().horizontalMappingTriggerDistance(),
-                geyser.config().horizontalCoordinateMapping());
+                () -> geyser.config().horizontalMappingTriggerDistance(),
+                () -> geyser.config().horizontalCoordinateMapping());
         }
         horizontalOffsetRelocator.checkRelocate(javaPosition);
     }
@@ -3066,12 +3072,26 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource, Jav
      * 在常驻开关打开时刷新一次动作栏真实坐标喵~
      * <p>
      * 由移动处理器在每次移动后调用；开关关闭时立即返回，开销只有一次布尔判断喵~
+     *
+     * <h2>为什么需要节流</h2>
+     * <p>
+     * Bedrock 客户端移动时每秒可能发几十个 PlayerAuthInput，若每次都推一个动作栏包，
+     * 既刷屏玩家又白白占用事件循环与带宽喵~ 因此这里按毫秒做最小间隔限制，
+     * 保证人眼能读清、又不至于拖慢移动处理喵~
      */
     public void updateCoordinateBarIfEnabled() {
         // 喵~防御：开关关闭时什么都不做，避免给不需要的玩家发无用数据包喵~
         if (!coordinateBarEnabled) {
             return;
         }
+        // 记录当前时间，用于判断距离上次推送是否已经超过最小间隔喵~
+        long now = System.currentTimeMillis();
+        // 喵~防御：间隔不够就跳过本次，动作栏每秒刷新几次足够用了喵~
+        if (now - lastCoordinateBarUpdateMillis < COORDINATE_BAR_MIN_INTERVAL_MILLIS) {
+            return;
+        }
+        // 先更新时间戳再发包，避免发包异常时反复重试造成刷屏喵~
+        lastCoordinateBarUpdateMillis = now;
         sendCoordinateBar();
     }
 }

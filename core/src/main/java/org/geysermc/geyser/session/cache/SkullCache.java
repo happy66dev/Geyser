@@ -234,6 +234,51 @@ public class SkullCache {
         lastPlayerPosition = null;
     }
 
+    /**
+     * 水平坐标映射切换 offset 时，把所有自定义头颅从旧坐标系搬到新坐标系喵~
+     * <p>
+     * 输入：坐标平移量（旧空间 + delta = 新空间），单位：格；
+     * 输出：无。效果是缓存 key、剔除用的距离计算与实体位置全部换到新坐标系喵~
+     *
+     * <h2>为什么必须搬</h2>
+     * <p>
+     * 这里的 key 是 Bedrock 坐标，距离剔除也是拿玩家 Bedrock 位置比的；
+     * offset 一变，所有头颅都会凭空「远了上一整段平移量」，
+     * 结果就是头颅在剔除半径边缘忽隐忽现、按位置移除也从此找不到它喵~
+     *
+     * @param delta 坐标平移量，单位：格
+     */
+    public void relocateBy(Vector3f delta) {
+        // 喵~防御：平移量为零（理论上不会发生）时直接返回，避免无谓地重建整张表喵~
+        if (delta.getX() == 0f && delta.getZ() == 0f) {
+            return;
+        }
+
+        // 主人注意：头颅数量受 max-visible-custom-skulls 限制，通常只有几十个，
+        // 整体重建一次是 O(n)，只在 offset 切换时发生，不会成为性能热点喵~
+
+        // 先收集所有条目，避免边遍历边改 map 触发并发修改异常喵~
+        List<Map.Entry<Vector3i, Skull>> snapshot = new ArrayList<>(skulls.entrySet());
+        skulls.clear();
+
+        Vector3i integerDelta = delta.toInt();
+        for (Map.Entry<Vector3i, Skull> entry : snapshot) {
+            // 用新的方块坐标作为 key 重新塞回表里喵~
+            Vector3i newPosition = entry.getKey().add(integerDelta);
+            Skull skull = entry.getValue();
+            skulls.put(newPosition, skull);
+            // 装饰实体本身也要跟着搬，否则它仍渲染在旧坐标系的位置上喵~
+            if (skull.entity != null) {
+                skull.entity.setPosition(skull.entity.position().add(delta));
+            }
+        }
+
+        // 距离剔除列表依赖玩家位置，搬完后必须重算一次，否则会按旧坐标判断可见性喵~
+        inRangeSkulls.clear();
+        totalSkullEntities = 0;
+        lastPlayerPosition = null;
+    }
+
     private @Nullable BlockDefinition translateCustomSkull(@Nullable String skinHash, BlockState blockState) {
         if (skinHash == null) {
             return null;

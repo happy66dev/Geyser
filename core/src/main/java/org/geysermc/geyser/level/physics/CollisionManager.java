@@ -436,7 +436,9 @@ public class CollisionManager {
      * @return if the player is currently in a water block
      */
     public boolean isPlayerInWater() {
-        BlockState state = session.getGeyser().getWorldManager().blockAt(session, session.getPlayerEntity().position().toInt());
+        // 玩家实体内部存的是 Bedrock 坐标，查 Java 世界前必须把 X/Y/Z 三轴全部反向还原喵~
+        Vector3i javaPosition = session.inverseMapPosition(session.getPlayerEntity().position().toInt());
+        BlockState state = session.getGeyser().getWorldManager().blockAt(session, javaPosition);
         return state.is(Blocks.WATER) && state.getValue(Properties.LEVEL) == 0;
     }
 
@@ -444,7 +446,9 @@ public class CollisionManager {
      * @return if the player is currently touching water
      */
     public boolean isPlayerTouchingWater() {
-        BlockState state = session.getGeyser().getWorldManager().blockAt(session, session.getPlayerEntity().position().toInt());
+        // 同上：不还原坐标系会查到偏移几千格之外的水，导致游泳状态永远错误喵~
+        Vector3i javaPosition = session.inverseMapPosition(session.getPlayerEntity().position().toInt());
+        BlockState state = session.getGeyser().getWorldManager().blockAt(session, javaPosition);
         return state.is(Blocks.WATER);
     }
 

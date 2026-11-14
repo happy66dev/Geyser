@@ -26,6 +26,7 @@
 package org.geysermc.geyser.entity.type;
 
 import lombok.Getter;
+import org.cloudburstmc.math.vector.Vector3f;
 import org.cloudburstmc.math.vector.Vector3i;
 import org.cloudburstmc.nbt.NbtMap;
 import org.cloudburstmc.nbt.NbtMapBuilder;
@@ -53,7 +54,14 @@ public class ItemFrameEntity extends HangingEntity {
      * Used for getting the Bedrock block position.
      * Blocks deal with integers whereas entities deal with floats.
      */
-    private final Vector3i bedrockPosition;
+    /**
+     * 物品展示框在 Bedrock 坐标系中的方块位置喵~
+     * <p>
+     * 不能是 final：水平坐标映射切换 offset 时整个客户端世界都会平移，
+     * 若这里保持构造时的旧坐标，后续所有包（更新方块、方块实体 NBT、卸载）
+     * 都会发到旧坐标系，展示框在客户端就会「消失」或错位喵~
+     */
+    private Vector3i bedrockPosition;
     /**
      * Specific block 'state' we are emulating in Bedrock.
      */
@@ -149,6 +157,35 @@ public class ItemFrameEntity extends HangingEntity {
         builder.putFloat("ItemRotation", rotation);
         cachedTag = builder.build();
         changed = true;
+    }
+
+    /**
+     * 把展示框从旧坐标系平移到新坐标系，并同步更新方块实体缓存喵~
+     * <p>
+     * 输入：坐标平移量（旧空间 + delta = 新空间）；
+     * 输出：无。效果是缓存的 key 与后续所有包的坐标都换成新坐标系，
+     * 这样按位置查找（破坏方块、替换方块）才不会落空喵~
+     *
+     * @param delta 坐标平移量，单位：格
+     */
+    public void relocateBy(Vector3f delta) {
+        // 老位置先记下来，用于把缓存中的旧 key 正确移除喵~
+        Vector3i oldPosition = this.bedrockPosition;
+        // 再算出新位置（方块坐标只需要整数部分，偏移量本身是整区块对齐的，不会引入小数误差）喵~
+        Vector3i newPosition = oldPosition.add(delta.toInt());
+
+        // 喵~防御：位置没变时直接返回，避免无意义地反复改缓存喵~
+        if (oldPosition.equals(newPosition)) {
+            return;
+        }
+
+        // 先从缓存里按旧 key 摘掉，再用新 key 放回去，保证查找表一致性喵~
+        session.getItemFrameCache().remove(oldPosition, this);
+        this.bedrockPosition = newPosition;
+        session.getItemFrameCache().put(newPosition, this);
+
+        // NBT 里内嵌的 x/y/z 也来自 bedrockPosition，必须重建一次喵~
+        this.changed = true;
     }
 
     @Override

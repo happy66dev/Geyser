@@ -69,6 +69,9 @@ public final class HorizontalOffsetMapper {
     /** 压缩目标上限，单位：格；开平方压缩时一旦落入这个范围就停止喵~ */
     private static final double RELATIVE_TARGET = 100.0;
 
+    /** 开平方压缩的最大迭代次数；纯属双重保险，正常数据 4 次以内必然收敛喵~ */
+    private static final int MAX_SHRINK_ITERATIONS = 64;
+
     /** 恒等映射单例，未启用水平映射时使用，避免每个会话重复分配对象喵~ */
     private static final HorizontalOffsetMapper IDENTITY = new HorizontalOffsetMapper(0, 0);
 
@@ -97,6 +100,11 @@ public final class HorizontalOffsetMapper {
     public static HorizontalOffsetMapper create(Vector3d playerPosition, int triggerDistance) {
         // 喵~防御：玩家位置缺失时无法计算 offset，直接退化为恒等映射而不是抛异常打断登录喵~
         if (playerPosition == null) {
+            return IDENTITY;
+        }
+
+        // 喵~防御：NaN 与无穷大无法参与任何整数换算（floor 会产生 Integer.MIN_VALUE），直接退化为恒等映射喵~
+        if (!Double.isFinite(playerPosition.getX()) || !Double.isFinite(playerPosition.getZ())) {
             return IDENTITY;
         }
 
@@ -131,10 +139,17 @@ public final class HorizontalOffsetMapper {
         int compressed = GenericMath.floor(shrinkTowardsOrigin(coordinate));
 
         // offset 取「原始坐标 - 压缩目标」再向下对齐到区块，保证映射后坐标落在区块边界上喵~
-        int rawOffset = GenericMath.floor(coordinate) - compressed;
+        // 喵~防御：坐标理论上可能极大，先按 long 计算再收窄，避免 int 溢出后符号翻转导致世界错位喵~
+        long rawOffset = (long) Math.floor(coordinate) - compressed;
 
         // 向下取整到 16 的倍数；用位运算实现，对负数同样正确喵~
-        return (rawOffset >> 4) << 4;
+        long chunkAlignedOffset = (rawOffset >> 4) << 4;
+
+        // 喵~防御：超出 int 表示范围时退化为 0（不做映射），总比世界整体跳到错误位置安全喵~
+        if (chunkAlignedOffset > Integer.MAX_VALUE || chunkAlignedOffset < Integer.MIN_VALUE) {
+            return 0;
+        }
+        return (int) chunkAlignedOffset;
     }
 
     /**
@@ -143,17 +158,30 @@ public final class HorizontalOffsetMapper {
      * 思路：绝对值大于 100 时不断取平方根，因为平方根增长极慢，几步之内一定能落进 100 格内喵~
      * 输入输出都是双精度；0 与负数都能正确处理（负数先取绝对值再还原符号）喵~
      *
+     * <h2>终止性保证</h2>
+     * <p>
+     * 平方根单调递减只在有限输入下成立：<code>sqrt(Infinity) == Infinity</code>，
+     * 因此必须在入口拦下非有限值，否则循环会永久卡住整个会话事件循环喵~
+     *
      * @param coordinate 待压缩的坐标值，单位：格
-     * @return 压缩后的坐标值，绝对值不超过 100 格左右喵~
+     * @return 压缩后的坐标值，绝对值不超过 100 格左右；非有限输入返回 0 喵~
      */
     private static double shrinkTowardsOrigin(double coordinate) {
+        // 喵~防御：NaN 会让所有比较都返回 false，无穷大在开平方后仍是无穷大，两者都会让下面的循环永不退出喵~
+        // 这里直接返回 0，把异常数据退化成「不需要压缩」，绝不阻塞事件循环喵~
+        if (!Double.isFinite(coordinate)) {
+            return 0;
+        }
+
         // 记录原始符号，压缩过程只对绝对值做运算喵~
         double sign = Math.signum(coordinate);
         // 复制一份可变的值，避免修改调用方数据喵~
         double magnitude = Math.abs(coordinate);
 
         // 反复开平方直到落入目标范围；平方根单调递减，循环一定会终止喵~
-        while (magnitude > RELATIVE_TARGET) {
+        // 喵~防御：额外的迭代上限只是双重保险，正常情况下 4 次以内就会退出喵~
+        int safetyCounter = 0;
+        while (magnitude > RELATIVE_TARGET && safetyCounter++ < MAX_SHRINK_ITERATIONS) {
             magnitude = Math.sqrt(magnitude);
         }
 

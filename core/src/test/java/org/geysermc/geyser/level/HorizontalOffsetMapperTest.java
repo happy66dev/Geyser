@@ -248,4 +248,66 @@ class HorizontalOffsetMapperTest {
 
         assertEquals(expectedNeedsMapping, mapper.needsMapping());
     }
+
+    @ParameterizedTest
+    @CsvSource({
+        // 非法数值类型，全部必须退化为恒等映射而不是卡死或抛异常
+        "NaN, 10000",
+        "Infinity, 10000",
+        "-Infinity, 10000",
+        "0, 10000"
+    })
+    void nonFiniteCoordinatesFallBackToIdentity(double javaCoordinate, int triggerDistance) {
+        // 喵~防御回归测试：NaN 与无穷大曾会让开平方循环永不退出，进而卡死整个会话事件循环喵~
+        HorizontalOffsetMapper mapper = HorizontalOffsetMapper.create(Vector3d.from(javaCoordinate, 64, 0), triggerDistance);
+
+        // 非有限坐标必须退化为恒等映射，绝不产生位移喵~
+        assertFalse(mapper.needsMapping(), "非有限坐标不应启用映射：" + javaCoordinate);
+        assertEquals(0, mapper.offsetX());
+        assertEquals(0, mapper.offsetZ());
+    }
+
+    @Test
+    void nonFiniteCoordinatesOnOneAxisFallBackToIdentity() {
+        // 只要任一分量非有限，整体就退化为恒等映射，避免另一个轴被单方面平移喵~
+        HorizontalOffsetMapper mapper = HorizontalOffsetMapper.create(
+            Vector3d.from(Double.POSITIVE_INFINITY, 64, 50_000), 10000);
+
+        assertFalse(mapper.needsMapping());
+    }
+
+    @Test
+    void extremeButFiniteCoordinatesStaySafe() {
+        // 回归测试：超出 int 表示范围的坐标无法用 int offset 表达，
+        // 此时必须安全退化为「不映射」，绝不能溢出成错误的小 offset 把世界搬到错误位置喵~
+        HorizontalOffsetMapper mapper = HorizontalOffsetMapper.create(Vector3d.from(1.0E15, 64, 0), 10000);
+
+        // 这种量级超出 int offset 的表达能力，按设计退化为恒等映射喵~
+        assertFalse(mapper.needsMapping(), "超出 int 范围的坐标应退化为恒等映射");
+        // 退化为恒等映射时，坐标必须原样返回，不能悄悄改动喵~
+        assertEquals(1_000_000_000, mapper.mapPosition(Vector3i.from(1_000_000_000, 64, 0)).getX());
+    }
+
+    @Test
+    void largeButRepresentableCoordinatesStillMap() {
+        // 回归测试：可被 int 正常表达的远距离坐标必须正常映射，不能被上面的退化逻辑误伤喵~
+        HorizontalOffsetMapper mapper = HorizontalOffsetMapper.create(Vector3d.from(5_000_000, 64, 0), 10000);
+
+        // 五百万格在 int 范围内，必须启用映射喵~
+        assertTrue(mapper.needsMapping());
+        // 映射后应压到原点附近，保证 float32 精度够用喵~
+        int mapped = mapper.mapPosition(Vector3i.from(5_000_000, 64, 0)).getX();
+        assertTrue(Math.abs(mapped) <= 10_000, "映射后仍过于远离原点：" + mapped);
+    }
+
+    @Test
+    void offsetRemainsChunkAlignedAcrossWideRange() {
+        // 回归测试：offset 必须是 16 的整数倍，否则区块内容会错切喵~
+        for (int coordinate = 9999; coordinate <= 100_001; coordinate += 7919) {
+            HorizontalOffsetMapper mapper = HorizontalOffsetMapper.create(Vector3d.from(coordinate, 64, -coordinate), 10000);
+
+            assertEquals(0, mapper.offsetX() % 16, "X offset 未对齐区块：" + mapper.offsetX());
+            assertEquals(0, mapper.offsetZ() % 16, "Z offset 未对齐区块：" + mapper.offsetZ());
+        }
+    }
 }
