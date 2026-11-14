@@ -50,9 +50,11 @@ import org.checkerframework.checker.index.qual.Positive;
 import org.checkerframework.checker.nullness.qual.MonotonicNonNull;
 import org.checkerframework.checker.nullness.qual.NonNull;
 import org.checkerframework.checker.nullness.qual.Nullable;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.checkerframework.common.value.qual.IntRange;
 import org.cloudburstmc.math.vector.Vector2f;
 import org.cloudburstmc.math.vector.Vector2i;
+import org.cloudburstmc.math.vector.Vector3d;
 import org.cloudburstmc.math.vector.Vector3f;
 import org.cloudburstmc.math.vector.Vector3i;
 import org.cloudburstmc.nbt.NbtList;
@@ -98,6 +100,7 @@ import org.cloudburstmc.protocol.bedrock.packet.SetCommandsEnabledPacket;
 import org.cloudburstmc.protocol.bedrock.packet.SetEntityMotionPacket;
 import org.cloudburstmc.protocol.bedrock.packet.SetPlayerGameTypePacket;
 import org.cloudburstmc.protocol.bedrock.packet.SetTimePacket;
+import org.cloudburstmc.protocol.bedrock.packet.SetTitlePacket;
 import org.cloudburstmc.protocol.bedrock.packet.StartGamePacket;
 import org.cloudburstmc.protocol.bedrock.packet.SyncEntityPropertyPacket;
 import org.cloudburstmc.protocol.bedrock.packet.TextPacket;
@@ -161,6 +164,8 @@ import org.geysermc.geyser.inventory.recipe.TrimRecipes;
 import org.geysermc.geyser.item.Items;
 import org.geysermc.geyser.item.type.BlockItem;
 import org.geysermc.geyser.level.BedrockDimension;
+import org.geysermc.geyser.level.HorizontalOffsetMapper;
+import org.geysermc.geyser.level.HorizontalOffsetRelocator;
 import org.geysermc.geyser.level.JavaDimension;
 import org.geysermc.geyser.level.WorldHeightMapper;
 import org.geysermc.geyser.level.gamerule.GameRuleHandler;
@@ -512,6 +517,30 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource, Jav
 
     @Setter
     private WorldHeightMapper worldHeightMapper = WorldHeightMapper.identity();
+
+    /**
+     * 水平（X/Z）坐标映射器，负责把 Java 真实坐标平移到 Bedrock 客户端原点附近喵~
+     * <p>
+     * 默认是恒等映射，因此未启用时所有坐标方法都原样返回，不产生任何额外开销喵~
+     */
+    @Setter
+    private HorizontalOffsetMapper horizontalOffsetMapper = HorizontalOffsetMapper.identity();
+
+    /**
+     * 水平坐标重定位器，按配置阈值检测玩家是否越界并把整个客户端世界搬到新坐标系喵~
+     * <p>
+     * 采用延迟创建：未启用水平映射的服务器完全不会分配这个对象喵~
+     */
+    private @Nullable HorizontalOffsetRelocator horizontalOffsetRelocator;
+
+    /**
+     * 是否在玩家快捷栏常驻显示真实坐标，由 /geyser coordinate toggle 控制喵~
+     * <p>
+     * 开关放在会话上而不是全局配置，因为每个玩家想不想看是自己的事喵~
+     */
+    @Setter
+    @Getter
+    private boolean coordinateBarEnabled = false;
 
     // 仅在 debugMode 时记录已输出的区块高度组合，避免每个区块都重复输出 INFO 日志喵~
     private final Set<String> loggedChunkHeightDiagnostics = new java.util.HashSet<>();
@@ -2857,7 +2886,8 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource, Jav
     public Vector3f mapPosition(Vector3f pos) {
         TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
         long mappingStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
-        Vector3f mappedPosition = worldHeightMapper.mapPosition(pos);
+        // 先把高度映射加上（Y 轴），再把水平映射加上（X/Z 轴），两个映射器各管各的轴互不干扰喵~
+        Vector3f mappedPosition = horizontalOffsetMapper.mapPosition(worldHeightMapper.mapPosition(pos));
         if (timingDiagnostics != null && timingDiagnostics.enabled()) {
             timingDiagnostics.record(TimingDiagnostics.Metric.HEIGHT_MAPPING, System.nanoTime() - mappingStartNanos);
         }
@@ -2867,7 +2897,8 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource, Jav
     public Vector3i mapPosition(Vector3i pos) {
         TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
         long mappingStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
-        Vector3i mappedPosition = worldHeightMapper.mapPosition(pos);
+        // 方块坐标同样是 Y 轴加高度偏移、X/Z 轴加水平偏移，顺序不影响结果喵~
+        Vector3i mappedPosition = horizontalOffsetMapper.mapPosition(worldHeightMapper.mapPosition(pos));
         if (timingDiagnostics != null && timingDiagnostics.enabled()) {
             timingDiagnostics.record(TimingDiagnostics.Metric.HEIGHT_MAPPING, System.nanoTime() - mappingStartNanos);
         }
@@ -2884,11 +2915,12 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource, Jav
         return worldHeightMapper.mapYUnclamped(javaY);
     }
 
-    // 仅加 offset 不 clamp，Vector3f 版本喵~
+    // 仅加 offset 不 clamp，Vector3f 版本；X/Z 轴同时叠加水平映射喵~
     public Vector3f mapPositionUnclamped(Vector3f pos) {
         TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
         long mappingStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
-        Vector3f mappedPosition = worldHeightMapper.mapPositionUnclamped(pos);
+        // 高度映射不 clamp Y、水平映射只动 X/Z，两者组合正好覆盖「允许越界」的全部轴喵~
+        Vector3f mappedPosition = horizontalOffsetMapper.mapPosition(worldHeightMapper.mapPositionUnclamped(pos));
         if (timingDiagnostics != null && timingDiagnostics.enabled()) {
             timingDiagnostics.record(TimingDiagnostics.Metric.HEIGHT_MAPPING, System.nanoTime() - mappingStartNanos);
         }
@@ -2910,7 +2942,8 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource, Jav
     public Vector3f inverseMapPosition(Vector3f pos) {
         TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
         long mappingStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
-        Vector3f mappedPosition = worldHeightMapper.inverseMapPosition(pos);
+        // 反向映射顺序与正向相反：先去掉 X/Z 平移，再减掉 Y 轴高度偏移喵~
+        Vector3f mappedPosition = worldHeightMapper.inverseMapPosition(horizontalOffsetMapper.inverseMapPosition(pos));
         if (timingDiagnostics != null && timingDiagnostics.enabled()) {
             timingDiagnostics.record(TimingDiagnostics.Metric.HEIGHT_MAPPING, System.nanoTime() - mappingStartNanos);
         }
@@ -2920,10 +2953,125 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource, Jav
     public Vector3i inverseMapPosition(Vector3i pos) {
         TimingDiagnostics timingDiagnostics = geyser.getTimingDiagnostics();
         long mappingStartNanos = timingDiagnostics != null && timingDiagnostics.enabled() ? System.nanoTime() : 0L;
-        Vector3i mappedPosition = worldHeightMapper.inverseMapPosition(pos);
+        // 反向映射顺序与正向相反：先去掉 X/Z 平移，再减掉 Y 轴高度偏移喵~
+        Vector3i mappedPosition = worldHeightMapper.inverseMapPosition(horizontalOffsetMapper.inverseMapPosition(pos));
         if (timingDiagnostics != null && timingDiagnostics.enabled()) {
             timingDiagnostics.record(TimingDiagnostics.Metric.HEIGHT_MAPPING, System.nanoTime() - mappingStartNanos);
         }
         return mappedPosition;
+    }
+
+    /**
+     * 把 Java 区块坐标（区块索引，不是方块坐标）映射成 Bedrock 区块坐标喵~
+     * <p>
+     * 区块索引只能按整区块平移，否则会把区块内容错切半个区块，所以这里委托给映射器的区块专用方法喵~
+     *
+     * @param javaChunkX Java 坐标系中的区块 X 索引
+     * @param javaChunkZ Java 坐标系中的区块 Z 索引
+     * @return 长度为 2 的数组，[0] 是 Bedrock 区块 X，[1] 是 Bedrock 区块 Z 喵~
+     */
+    public int[] mapChunkCoordinates(int javaChunkX, int javaChunkZ) {
+        // 喵~防御：恒等映射时直接原样返回，省掉对象分配喵~
+        if (!horizontalOffsetMapper.needsMapping()) {
+            return new int[]{javaChunkX, javaChunkZ};
+        }
+        // 用区块专用映射，保证平移量是整区块，避免区块内容错位喵~
+        Vector2i mappedChunk = horizontalOffsetMapper.mapChunkCoordinates(Vector2i.from(javaChunkX, javaChunkZ));
+        return new int[]{mappedChunk.getX(), mappedChunk.getY()};
+    }
+
+    /**
+     * 把 Bedrock 区块索引还原成 Java 区块索引喵~
+     *
+     * @param bedrockChunkX Bedrock 坐标系中的区块 X 索引
+     * @param bedrockChunkZ Bedrock 坐标系中的区块 Z 索引
+     * @return 长度为 2 的数组，[0] 是 Java 区块 X，[1] 是 Java 区块 Z 喵~
+     */
+    public int[] inverseMapChunkCoordinates(int bedrockChunkX, int bedrockChunkZ) {
+        // 喵~防御：恒等映射时直接原样返回喵~
+        if (!horizontalOffsetMapper.needsMapping()) {
+            return new int[]{bedrockChunkX, bedrockChunkZ};
+        }
+        // 区块平移量等于方格平移量除以 16，反向加回来喵~
+        int chunkOffsetX = horizontalOffsetMapper.offsetX() >> 4;
+        int chunkOffsetZ = horizontalOffsetMapper.offsetZ() >> 4;
+        return new int[]{bedrockChunkX + chunkOffsetX, bedrockChunkZ + chunkOffsetZ};
+    }
+
+    /**
+     * 按配置与玩家真实位置检查是否需要重新对齐水平 offset 喵~
+     * <p>
+     * 只有玩家真实位置越过阈值、或者当前已经处于映射状态时才可能真正切换坐标系，
+     * 其余情况下只做两次绝对值比较，逐帧调用也没有性能压力喵~
+     *
+     * @param javaPosition 玩家在 <b>Java 坐标系</b> 中的最新位置，不能为 null
+     */
+    public void relocateHorizontallyIfNeeded(Vector3d javaPosition) {
+        // 喵~防御：配置为 null 时（理论上不会发生）直接跳过，避免空指针打断移动包处理喵~
+        if (geyser == null || geyser.config() == null) {
+            return;
+        }
+        // 延迟创建重定位器，未启用水平映射的服务器完全不会分配这个对象喵~
+        if (horizontalOffsetRelocator == null) {
+            horizontalOffsetRelocator = new HorizontalOffsetRelocator(this,
+                geyser.config().horizontalMappingTriggerDistance(),
+                geyser.config().horizontalCoordinateMapping());
+        }
+        horizontalOffsetRelocator.checkRelocate(javaPosition);
+    }
+
+    /**
+     * 读取玩家在 Java 服务端的真实坐标（双精度）喵~
+     * <p>
+     * Bedrock 客户端上报的位置是 Bedrock 坐标系，必须反向还原成 Java 坐标才能给玩家看喵~
+     *
+     * @return Java 坐标系中的玩家位置；会话尚未生成玩家实体时返回零向量喵~
+     */
+    public Vector3d realPlayerPosition() {
+        // 喵~防御：登录早期还没创建玩家实体，直接返回零向量而不是抛空指针喵~
+        if (playerEntity == null) {
+            return Vector3d.ZERO;
+        }
+        // 先取客户端可见位置（含实体偏移），再走完整反向映射把 X/Y/Z 全部还原喵~
+        Vector3f bedrockPosition = playerEntity.bedrockPosition();
+        // 喵~防御：极端情况下位置可能尚未初始化，null 时同样回退到零向量喵~
+        if (bedrockPosition == null) {
+            return Vector3d.ZERO;
+        }
+        return inverseMapPosition(bedrockPosition).toDouble();
+    }
+
+    /**
+     * 在动作栏推送一次玩家真实坐标喵~
+     * <p>
+     * 只在玩家主动触发或常驻开关打开时调用，不注册每帧回调，因此没有性能开销喵~
+     */
+    public void sendCoordinateBar() {
+        // 喵~防御：快捷栏文本必须用中性的玩家可读文案，不能带任何猫娘用语喵~
+        Vector3d realPosition = realPlayerPosition();
+        String coordinateText = GeyserLocale.getPlayerLocaleString("geyser.chat.real_coordinates", locale(),
+            String.format(Locale.ROOT, "%.2f", realPosition.getX()),
+            String.format(Locale.ROOT, "%.2f", realPosition.getY()),
+            String.format(Locale.ROOT, "%.2f", realPosition.getZ()));
+
+        SetTitlePacket titlePacket = new SetTitlePacket();
+        titlePacket.setType(SetTitlePacket.Type.ACTIONBAR);
+        titlePacket.setText(coordinateText);
+        titlePacket.setXuid("");
+        titlePacket.setPlatformOnlineId("");
+        sendUpstreamPacket(titlePacket);
+    }
+
+    /**
+     * 在常驻开关打开时刷新一次动作栏真实坐标喵~
+     * <p>
+     * 由移动处理器在每次移动后调用；开关关闭时立即返回，开销只有一次布尔判断喵~
+     */
+    public void updateCoordinateBarIfEnabled() {
+        // 喵~防御：开关关闭时什么都不做，避免给不需要的玩家发无用数据包喵~
+        if (!coordinateBarEnabled) {
+            return;
+        }
+        sendCoordinateBar();
     }
 }

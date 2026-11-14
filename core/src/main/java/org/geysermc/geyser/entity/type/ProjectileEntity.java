@@ -208,9 +208,9 @@ public class ProjectileEntity extends Entity implements Tickable {
      * @return true if the entity was removed
      */
     public boolean removedInVoid() {
-        // 实体内部位置已映射到 Bedrock 坐标；虚空判断必须使用还原后的 Java Y 喵~
-        float javaY = session.inverseMapY(position.getY());
-        if (javaY < session.getDimensionType().minY() - 64) {
+        // 实体内部位置已映射到 Bedrock 坐标；虚空判断必须使用还原后的 Java 真实位置喵~
+        Vector3f javaPosition = session.inverseMapPosition(position);
+        if (javaPosition.getY() < session.getDimensionType().minY() - 64) {
             session.getEntityCache().removeEntity(this);
             return true;
         }

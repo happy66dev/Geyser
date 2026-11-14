@@ -92,7 +92,8 @@ public class CreakingEntity extends MonsterEntity {
 
     public void setHomePos(EntityMetadata<Optional<Vector3i>,? extends MetadataType<Optional<Vector3i>>> optionalEntityMetadata) {
         if (optionalEntityMetadata.getValue().isPresent()) {
-            this.homePosition = optionalEntityMetadata.getValue().get();
+            // 精准采集方块位置来自 Java 服务端（Java 坐标系），存成 Bedrock 坐标方便粒子包直接使用喵~
+            this.homePosition = session.mapPosition(optionalEntityMetadata.getValue().get());
         } else {
             this.homePosition = null;
         }
@@ -102,6 +103,7 @@ public class CreakingEntity extends MonsterEntity {
         if (this.homePosition != null) {
             LevelEventGenericPacket levelEventGenericPacket = new LevelEventGenericPacket();
             levelEventGenericPacket.setType(LevelEvent.PARTICLE_CREAKING_HEART_TRIAL);
+            // 实体自身位置已经是 Bedrock 坐标，可以直接使用喵~
             Vector3f bedrockPosition = bedrockPosition();
             levelEventGenericPacket.setTag(
                 NbtMap.builder()
@@ -110,6 +112,7 @@ public class CreakingEntity extends MonsterEntity {
                     .putFloat("CreakingY", bedrockPosition.getY())
                     .putFloat("CreakingZ", bedrockPosition.getZ())
                     .putInt("HeartAmount", 20)
+                    // homePosition 已在 setHomePos 中映射成 Bedrock 坐标，这里原样填入即可喵~
                     .putFloat("HeartX", homePosition.getX())
                     .putFloat("HeartY", homePosition.getY())
                     .putFloat("HeartZ", homePosition.getZ())

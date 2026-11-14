@@ -67,6 +67,7 @@ public class JavaPlayerLookAtTranslator extends PacketTranslator<ClientboundPlay
                 };
             }
         }
-        return Vector3f.from(packet.getX(), session.mapY(packet.getY()), packet.getZ());
+        // 目标方块位于 Java 坐标系，X/Y/Z 三轴都要映射，只映射 Y 会让视线指向错误的水平位置喵~
+        return session.mapPosition(Vector3f.from(packet.getX(), packet.getY(), packet.getZ()));
     }
 }

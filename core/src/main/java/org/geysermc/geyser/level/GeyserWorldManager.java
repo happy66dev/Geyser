@@ -81,12 +81,14 @@ public class GeyserWorldManager extends WorldManager {
         int maxY = Integer.MIN_VALUE;
         int maxZ = Integer.MIN_VALUE;
         for (; iter.hasNext(); iter.next()) {
-            minX = Math.min(minX, iter.getX());
-            minY = Math.min(minY, session.inverseMapY(iter.getY()));
-            minZ = Math.min(minZ, iter.getZ());
-            maxX = Math.max(maxX, iter.getX());
-            maxY = Math.max(maxY, session.inverseMapY(iter.getY()));
-            maxZ = Math.max(maxZ, iter.getZ());
+            // 迭代器坐标属于 Bedrock 坐标系，先整体还原成 Java 坐标再统计包围盒喵~
+            Vector3i javaPosition = session.inverseMapPosition(Vector3i.from(iter.getX(), iter.getY(), iter.getZ()));
+            minX = Math.min(minX, javaPosition.getX());
+            minY = Math.min(minY, javaPosition.getY());
+            minZ = Math.min(minZ, javaPosition.getZ());
+            maxX = Math.max(maxX, javaPosition.getX());
+            maxY = Math.max(maxY, javaPosition.getY());
+            maxZ = Math.max(maxZ, javaPosition.getZ());
         }
         iter.reset();
         BlockPositionIterator javaIter = BlockPositionIterator.fromMinMax(minX, minY, minZ, maxX, maxY, maxZ);

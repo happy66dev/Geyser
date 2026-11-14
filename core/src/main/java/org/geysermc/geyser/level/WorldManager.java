@@ -91,7 +91,9 @@ public abstract class WorldManager {
     public int[] getBlocksAt(GeyserSession session, BlockPositionIterator iter) {
         int[] blocks = new int[iter.getMaxIterations()];
         for (; iter.hasNext(); iter.next()) {
-            int networkId = this.getBlockAt(session, iter.getX(), session.inverseMapY(iter.getY()), iter.getZ());
+            // 迭代器里的坐标来自 Bedrock 碰撞箱；查 Java 世界前必须把 X/Y/Z 三轴全部还原喵~
+            Vector3i javaPosition = session.inverseMapPosition(Vector3i.from(iter.getX(), iter.getY(), iter.getZ()));
+            int networkId = this.getBlockAt(session, javaPosition.getX(), javaPosition.getY(), javaPosition.getZ());
             blocks[iter.getIteration()] = networkId;
         }
         return blocks;

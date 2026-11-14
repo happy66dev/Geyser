@@ -54,11 +54,11 @@ public class JavaLevelParticlesTranslator extends PacketTranslator<ClientboundLe
             Random random = ThreadLocalRandom.current();
             if (packet.getAmount() == 0) {
                 // 0 means don't apply the offset
-                session.sendUpstreamPacket(packetConstructor.apply(mapRandomizationY(session, ParticleRandomization.ofPacket(packet, random))));
+                session.sendUpstreamPacket(packetConstructor.apply(mapRandomizationCoordinates(session, ParticleRandomization.ofPacket(packet, random))));
             } else {
                 int amount = Math.min(MAX_PARTICLES, packet.getAmount());
                 for (int i = 0; i < amount; i++) {
-                    session.sendUpstreamPacket(packetConstructor.apply(mapRandomizationY(session, ParticleRandomization.ofPacket(packet, random))));
+                    session.sendUpstreamPacket(packetConstructor.apply(mapRandomizationCoordinates(session, ParticleRandomization.ofPacket(packet, random))));
                 }
             }
         } else {
@@ -68,17 +68,15 @@ public class JavaLevelParticlesTranslator extends PacketTranslator<ClientboundLe
     }
 
     /**
-     * 把粒子随机化结果里的 Y 轴从 Java 服务端坐标换算成 Bedrock 客户端坐标喵~
+     * 把粒子随机化结果里的坐标从 Java 服务端坐标系换算成 Bedrock 客户端坐标系喵~
      * <p>
      * 输入：session 为当前玩家会话，randomization 为上游按 Java 原始坐标算好的粒子位置与速度喵~
-     * 输出：Y 轴已加上高度映射 offset 的新粒子随机化对象；不需要映射时原样返回喵~
-     * 边界：只对位置 Y 加 offset 而不做 clamp，允许粒子超出维度高度范围喵~
+     * 输出：X/Y/Z 三轴都已映射的新粒子随机化对象；不需要映射时原样返回喵~
+     * 边界：用不 clamp 的版本，允许粒子超出维度高度范围喵~
      */
-    private static ParticleRandomization mapRandomizationY(GeyserSession session, ParticleRandomization randomization) {
-        // 取上游算好的位置，只替换 Y 轴，X/Z 保持不变喵~
-        Vector3f mappedPosition = Vector3f.from(randomization.position().getX(),
-                session.mapYUnclamped(randomization.position().getY()),
-                randomization.position().getZ());
+    private static ParticleRandomization mapRandomizationCoordinates(GeyserSession session, ParticleRandomization randomization) {
+        // 粒子位置属于 Java 坐标系，X/Y/Z 三轴都要映射，只改 Y 会让粒子跑到错误的水平位置喵~
+        Vector3f mappedPosition = session.mapPositionUnclamped(randomization.position());
         // 速度辅助量属于方向性数据，不参与坐标平移，原样透传喵~
         return new ParticleRandomization(mappedPosition, randomization.xAux(), randomization.yAux(), randomization.zAux());
     }

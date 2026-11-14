@@ -103,7 +103,9 @@ public class JavaLevelEventTranslator extends PacketTranslator<ClientboundLevelE
 
             if (GameProtocol.is26_50orHigher(session.protocolVersion())) {
                 String bedrockSound = SoundUtils.translatePlaySound(jukeboxSong.get().soundEvent());
-                long id = session.getWorldCache().addPlayingRecord(packet.getPosition());
+                // 喵~防御：这里必须存映射后的 Bedrock 坐标，因为停止播放时是用映射后的 origin 去取的，
+                // 之前两边坐标系不一致，导致唱片永远停不下来喵~
+                long id = session.getWorldCache().addPlayingRecord(origin);
 
                 PlaySoundPacket playSoundPacket = new PlaySoundPacket();
                 playSoundPacket.setServerSoundHandle(id);

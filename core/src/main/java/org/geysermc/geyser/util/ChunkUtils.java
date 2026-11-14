@@ -94,13 +94,23 @@ public class ChunkUtils {
         return (yzx >> 8) | (yzx & 0x0F0) | ((yzx & 0x00F) << 8);
     }
 
-    public static void updateChunkPosition(GeyserSession session, Vector3i position) {
+    /**
+     * 在玩家跨区块时通知 Bedrock 客户端扩展区块发布范围喵~
+     * <p>
+     * 传入的 position 必须已经是 Bedrock 坐标系，因为该包直接下发给 Bedrock 客户端；
+     * 调用方负责在传入前完成 Java→Bedrock 的映射喵~
+     *
+     * @param session 目标玩家会话
+     * @param bedrockPosition Bedrock 坐标系中的位置，单位：格
+     */
+    public static void updateChunkPosition(GeyserSession session, Vector3i bedrockPosition) {
         Vector2i chunkPos = session.getLastChunkPosition();
-        Vector2i newChunkPos = Vector2i.from(position.getX() >> 4, position.getZ() >> 4);
+        // 记住的区块位置同样属于 Bedrock 坐标系，因此用映射后的坐标比较喵~
+        Vector2i newChunkPos = Vector2i.from(bedrockPosition.getX() >> 4, bedrockPosition.getZ() >> 4);
 
         if (chunkPos == null || !chunkPos.equals(newChunkPos)) {
             NetworkChunkPublisherUpdatePacket chunkPublisherUpdatePacket = new NetworkChunkPublisherUpdatePacket();
-            chunkPublisherUpdatePacket.setPosition(position);
+            chunkPublisherUpdatePacket.setPosition(bedrockPosition);
             // Mitigates chunks not loading on 1.17.1 Paper and 1.19.3 Fabric. As of Bedrock 1.19.60.
             // https://github.com/GeyserMC/Geyser/issues/3490
             chunkPublisherUpdatePacket.setRadius(squareToCircle(session.getServerRenderDistance()) << 4);

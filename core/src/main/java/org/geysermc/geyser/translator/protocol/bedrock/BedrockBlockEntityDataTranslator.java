@@ -110,14 +110,15 @@ public class BedrockBlockEntityDataTranslator extends PacketTranslator<BlockEnti
             }
             // Put the final line on since it isn't done in the for loop
             if (iterator < lines.size()) lines.set(iterator, newMessage.toString());
-            // 告示牌方块坐标的 Y 轴需要从 Bedrock 客户端坐标系反算回 Java 服务端坐标系喵~
-            Vector3i pos = Vector3i.from(tag.getInt("x"), session.inverseMapY(tag.getInt("y")), tag.getInt("z"));
+            // 告示牌方块坐标整体位于 Bedrock 坐标系，X/Y/Z 三轴都要还原回 Java 服务端坐标系喵~
+            Vector3i pos = session.inverseMapPosition(Vector3i.from(tag.getInt("x"), tag.getInt("y"), tag.getInt("z")));
             ServerboundSignUpdatePacket signUpdatePacket = new ServerboundSignUpdatePacket(pos, lines, session.getWorldCache().isEditingSignOnFront());
             session.sendDownstreamGamePacket(signUpdatePacket);
 
         } else if (id.equals("JigsawBlock")) {
             // Client has just sent a jigsaw block update
-            Vector3i pos = Vector3i.from(tag.getInt("x"), session.inverseMapY(tag.getInt("y")), tag.getInt("z"));
+            // 拼图方块坐标同样位于 Bedrock 坐标系，X/Y/Z 三轴都要还原回 Java 服务端坐标系喵~
+            Vector3i pos = session.inverseMapPosition(Vector3i.from(tag.getInt("x"), tag.getInt("y"), tag.getInt("z")));
             String name = tag.getString("name");
             String target = tag.getString("target");
             String pool = tag.getString("target_pool");

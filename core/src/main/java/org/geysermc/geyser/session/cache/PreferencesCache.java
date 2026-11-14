@@ -76,7 +76,10 @@ public class PreferencesCache {
      */
     public void updateShowCoordinates() {
         allowShowCoordinates = !session.isReducedDebugInfo() && session.getGeyser().config().gameplay().showCoordinates();
-        session.sendGameRule("showcoordinates", allowShowCoordinates && prefersShowCoordinates);
+        // 启用水平映射后客户端坐标是映射后的假坐标，继续显示原生坐标会误导玩家，因此强制关闭喵~
+        // 想查真实坐标请用 /geyser coordinate 喵~
+        boolean horizontalMappingActive = session.getHorizontalOffsetMapper().needsMapping();
+        session.sendGameRule("showcoordinates", allowShowCoordinates && prefersShowCoordinates && !horizontalMappingActive);
     }
 
     /**

@@ -126,6 +126,10 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
         int sectionCountDiff = yOffset + (mappingOffset >> 4) - (bedrockDimension.minY() >> 4);
         GeyserChunkSection[] sections = new GeyserChunkSection[chunkSize + sectionCountDiff];
 
+        // 区块内方块实体的全局 X/Z 也要平移；offset 已按 16 格对齐，因此只在整区块级别偏移，不会错切区块内容喵~
+        final int chunkBlockX = (packet.getX() << 4) - session.getHorizontalOffsetMapper().offsetX();
+        final int chunkBlockZ = (packet.getZ() << 4) - session.getHorizontalOffsetMapper().offsetZ();
+
         try {
             ByteBuf in = Unpooled.wrappedBuffer(packet.getChunkData());
             long javaDataReadStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
@@ -183,7 +187,7 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                         // Check if block is piston or flower to see if we'll need to create additional block entities, as they're only block entities in Bedrock
                         if (state.block() instanceof BedrockChunkWantsBlockEntityTag blockEntity) {
                             bedrockBlockEntities.add(blockEntity.createTag(session,
-                                    Vector3i.from((packet.getX() << 4) + (yzx & 0xF), ((sectionY + yOffset) << 4) + ((yzx >> 8) & 0xF) + mappingOffset, (packet.getZ() << 4) + ((yzx >> 4) & 0xF)),
+                                    Vector3i.from(chunkBlockX + (yzx & 0xF), ((sectionY + yOffset) << 4) + ((yzx >> 8) & 0xF) + mappingOffset, chunkBlockZ + ((yzx >> 4) & 0xF)),
                                     state
                             ));
                         }
@@ -251,7 +255,7 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                         if (bedrockOnlyBlockEntityIds.get(paletteId)) {
                             BlockState state = BlockState.of(javaPalette.idToState(paletteId));
                             bedrockBlockEntities.add(((BedrockChunkWantsBlockEntityTag) state.block()).createTag(session,
-                                    Vector3i.from((packet.getX() << 4) + (yzx & 0xF), ((sectionY + yOffset) << 4) + ((yzx >> 8) & 0xF) + mappingOffset, (packet.getZ() << 4) + ((yzx >> 4) & 0xF)),
+                                    Vector3i.from(chunkBlockX + (yzx & 0xF), ((sectionY + yOffset) << 4) + ((yzx >> 8) & 0xF) + mappingOffset, chunkBlockZ + ((yzx >> 4) & 0xF)),
                                     state
                             ));
                         }
@@ -307,8 +311,7 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
                 session.getChunkCache().addToCache(packet.getX(), packet.getZ(), javaChunks);
             }
 
-            final int chunkBlockX = packet.getX() << 4;
-            final int chunkBlockZ = packet.getZ() << 4;
+            // 这两行原本在这里重新计算，现在改为复用上方已经减去水平 offset 的变量，避免重复平移喵~
             long blockEntityTranslationStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
             for (BlockEntityInfo blockEntity : blockEntities) {
                 BlockEntityType type = blockEntity.getType();
@@ -451,8 +454,10 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
             LevelChunkPacket levelChunkPacket = new LevelChunkPacket();
             levelChunkPacket.setSubChunksLength(sectionCount);
             levelChunkPacket.setCachingEnabled(false);
-            levelChunkPacket.setChunkX(packet.getX());
-            levelChunkPacket.setChunkZ(packet.getZ());
+            // 区块索引必须与内部方块实体坐标一起平移；offset 已按区块对齐，所以整区块平移不会错切内容喵~
+            int[] bedrockChunkCoordinates = session.mapChunkCoordinates(packet.getX(), packet.getZ());
+            levelChunkPacket.setChunkX(bedrockChunkCoordinates[0]);
+            levelChunkPacket.setChunkZ(bedrockChunkCoordinates[1]);
             levelChunkPacket.setData(byteBuf.retainedSlice());
             levelChunkPacket.setDimension(session.getBedrockDimension().bedrockId());
             // debugMode 下每种高度组合仅输出一次实际发往 Bedrock 的区块包数据喵~

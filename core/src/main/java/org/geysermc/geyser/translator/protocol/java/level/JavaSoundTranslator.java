@@ -40,8 +40,8 @@ public class JavaSoundTranslator extends PacketTranslator<ClientboundSoundPacket
 
     @Override
     public void translate(GeyserSession session, ClientboundSoundPacket packet) {
-        // 声音位置 Y 轴仅加 offset，不 clamp，允许声音位置超出维度高度喵~
-        Vector3f position = Vector3f.from(packet.getX(), session.mapYUnclamped(packet.getY()), packet.getZ());
+        // 声音位置位于 Java 坐标系，X/Y/Z 三轴都要映射；不 clamp 以允许声音位置超出维度高度喵~
+        Vector3f position = session.mapPositionUnclamped(Vector3f.from(packet.getX(), packet.getY(), packet.getZ()));
         SoundUtils.playSound(session, packet.getSound(), position, packet.getVolume(), packet.getPitch());
 
         // A brushing player's own dust is client-side on Java and never sent over the network, and

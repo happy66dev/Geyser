@@ -51,7 +51,8 @@ public class EnderCrystalEntity extends Entity {
         // Usually performed client-side on Bedrock except for Ender Dragon respawn event
         Optional<Vector3i> optionalPos = entityMetadata.getValue();
         if (optionalPos.isPresent()) {
-            metadata.put(EntityDataTypes.BLOCK_TARGET_POS, optionalPos.get());
+            // 光束目标方块位于 Java 坐标系，必须整点映射，否则光束会指向错误的方块喵~
+            metadata.put(EntityDataTypes.BLOCK_TARGET_POS, session.mapPosition(optionalPos.get()));
         } else {
             metadata.put(EntityDataTypes.BLOCK_TARGET_POS, Vector3i.ZERO);
         }

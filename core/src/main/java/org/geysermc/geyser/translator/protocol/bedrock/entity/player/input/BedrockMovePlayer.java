@@ -185,15 +185,17 @@ final class BedrockMovePlayer {
                 CollisionResult result = session.getCollisionManager().adjustBedrockPosition(packet.getPosition(), isOnGround, packet.getInputData().contains(PlayerAuthInputData.HANDLE_TELEPORT));
                 if (result != null) { // A null return value cancels the packet
                     Vector3d position = result.correctedMovement();
+                    // 移动结果位于 Bedrock 坐标系，回传 Java 服务端前必须把 X/Y/Z 三轴全部反向还原喵~
+                    Vector3d javaPosition = session.inverseMapPosition(position.toFloat()).toDouble();
 
                     Packet movePacket;
                     if (rotationChanged) {
                         // Send rotation updates as well
-                        // Y 轴反向映射回 Java 真实高度后再发包给 Java 服务端喵~
+                        // 使用还原后的 Java 真实坐标发包，否则服务端会认为玩家瞬移喵~
                         movePacket = new ServerboundMovePlayerPosRotPacket(
                             isOnGround,
                             horizontalCollision,
-                            position.getX(), session.inverseMapY(position.getY()), position.getZ(),
+                            javaPosition.getX(), javaPosition.getY(), javaPosition.getZ(),
                             javaYaw, pitch
                         );
                         entity.setYaw(yaw);
@@ -202,11 +204,17 @@ final class BedrockMovePlayer {
                         entity.setHeadYaw(headYaw);
                     } else {
                         // Rotation did not change; don't send an update with rotation
-                        // Y 轴反向映射回 Java 真实高度后再发包给 Java 服务端喵~
-                        movePacket = new ServerboundMovePlayerPosPacket(isOnGround, horizontalCollision, position.getX(), session.inverseMapY(position.getY()), position.getZ());
+                        // 使用还原后的 Java 真实坐标发包，保证服务端权威位置与客户端一致喵~
+                        movePacket = new ServerboundMovePlayerPosPacket(isOnGround, horizontalCollision, javaPosition.getX(), javaPosition.getY(), javaPosition.getZ());
                     }
 
                     entity.setPositionFromBedrockPos(packet.getPosition());
+
+                    // 玩家在前一帧之后可能已越过阈值，发送移动包前先检查一次是否需要重新对齐水平 offset 喵~
+                    session.relocateHorizontallyIfNeeded(javaPosition);
+
+                    // 玩家开了常驻坐标提示时同步刷新，否则提示会停在旧位置喵~
+                    session.updateCoordinateBarIfEnabled();
 
                     // Send final movement changes
                     session.sendDownstreamGamePacket(movePacket);

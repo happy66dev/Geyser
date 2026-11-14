@@ -58,6 +58,14 @@ public class WorldBorder {
     private static final int WORLD_BORDER_COLLISION_RANGE = 30;
     private static final int BORDER_COLLISION_Y_DISTANCE = 10;
 
+    /**
+     * 世界边界中心，始终保存 <b>Java 坐标系</b> 的原始值喵~
+     * <p>
+     * 原因：这个值直接来自 Java 服务端的边界包，属于服务端权威数据；
+     * 而 Geyser 内部所有碰撞、粒子比较用的都是 Bedrock 坐标系，
+     * 因此在 {@link #update()} 里再按水平映射把中心换算成 Bedrock 边界，
+     * 这样既不用改写服务端语义，也能保证比较双方在同一坐标系喵~
+     */
     @Setter
     private @NonNull Vector2d center = Vector2d.ZERO;
 
@@ -285,11 +293,16 @@ public class WorldBorder {
 
         double absoluteMinSize = -this.absoluteMaxSize;
 
+        // center 保存的是 Java 坐标；比较用的边界值必须先换算到 Bedrock 坐标系喵~
+        // 水平映射只平移 X/Z，正好对应这个二维中心的两个分量，因此可以直接减 offset 喵~
+        Vector2d bedrockCenter = session.getHorizontalOffsetMapper()
+            .mapPosition(Vector2d.from(this.center.getX(), this.center.getY()));
+
         // Mapping 2D vector to 3D coordinates >> Y becomes Z
-        this.minX = GenericMath.clamp(this.center.getX() - radius, absoluteMinSize, this.absoluteMaxSize);
-        this.minZ = GenericMath.clamp(this.center.getY() - radius, absoluteMinSize, this.absoluteMaxSize);
-        this.maxX = GenericMath.clamp(this.center.getX() + radius, absoluteMinSize, this.absoluteMaxSize);
-        this.maxZ = GenericMath.clamp(this.center.getY() + radius, absoluteMinSize, this.absoluteMaxSize);
+        this.minX = GenericMath.clamp(bedrockCenter.getX() - radius, absoluteMinSize, this.absoluteMaxSize);
+        this.minZ = GenericMath.clamp(bedrockCenter.getY() - radius, absoluteMinSize, this.absoluteMaxSize);
+        this.maxX = GenericMath.clamp(bedrockCenter.getX() + radius, absoluteMinSize, this.absoluteMaxSize);
+        this.maxZ = GenericMath.clamp(bedrockCenter.getY() + radius, absoluteMinSize, this.absoluteMaxSize);
 
         /*
          * Caching the warning boundaries.

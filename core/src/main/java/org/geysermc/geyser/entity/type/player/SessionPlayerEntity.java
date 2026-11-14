@@ -527,7 +527,8 @@ public class SessionPlayerEntity extends PlayerEntity {
 
     public void setLastDeathPosition(@Nullable GlobalPos pos) {
         if (pos != null) {
-            metadata.put(EntityDataTypes.PLAYER_LAST_DEATH_POS, pos.getPosition());
+            // 上次死亡点来自 Java 服务端（Java 坐标系），必须映射后才能作为 Bedrock 罗盘目标喵~
+            metadata.put(EntityDataTypes.PLAYER_LAST_DEATH_POS, session.mapPosition(pos.getPosition()));
             metadata.put(EntityDataTypes.PLAYER_LAST_DEATH_DIMENSION, DimensionUtils.javaToBedrock(pos.getDimension().asString()));
             metadata.put(EntityDataTypes.PLAYER_HAS_DIED, true);
         } else {

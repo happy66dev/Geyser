@@ -405,9 +405,9 @@ public class CollisionManager {
             int y = iter.getY();
             int z = iter.getZ();
             if (checkWorld) {
-                // 碰撞迭代器使用 Bedrock 坐标；查询 Java 世界前只反向映射 Y 轴喵~
-                int javaY = session.inverseMapY(y);
-                int blockId = session.getGeyser().getWorldManager().getBlockAt(session, x, javaY, z);
+                // 碰撞迭代器使用 Bedrock 坐标；查询 Java 世界前必须把 X/Y/Z 三轴全部反向还原喵~
+                Vector3i javaPosition = session.inverseMapPosition(Vector3i.from(x, y, z));
+                int blockId = session.getGeyser().getWorldManager().getBlockAt(session, javaPosition.getX(), javaPosition.getY(), javaPosition.getZ());
 
                 BlockCollision blockCollision = walkOnLava ? getCollisionLavaWalking(blockId, y, boundingBox) : BlockUtils.getCollision(blockId);
                 if (blockCollision != null && !(blockCollision instanceof ScaffoldingCollision)) {
@@ -495,8 +495,9 @@ public class CollisionManager {
         BlockPositionIterator iter = CollisionManager.collidableBlocksIterator(session, playerBox);
         double totalPushUp = 0;
         while (iter.hasNext()) {
-            // 传送碰撞箱位于 Bedrock 映射空间；世界方块查询使用 Java 原始 Y 喵~
-            int blockId = session.getGeyser().getWorldManager().getBlockAt(session, iter.getX(), session.inverseMapY(iter.getY()), iter.getZ());
+            // 传送碰撞箱位于 Bedrock 映射空间；世界方块查询必须使用 Java 原始三轴坐标喵~
+            Vector3i javaPosition = session.inverseMapPosition(Vector3i.from(iter.getX(), iter.getY(), iter.getZ()));
+            int blockId = session.getGeyser().getWorldManager().getBlockAt(session, javaPosition.getX(), javaPosition.getY(), javaPosition.getZ());
             BlockCollision collision = BlockUtils.getCollision(blockId);
             if (collision != null) {
                 for (BoundingBox box : collision.getBoundingBoxes()) {

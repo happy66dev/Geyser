@@ -40,17 +40,24 @@ public class JavaForgetLevelChunkTranslator extends PacketTranslator<Clientbound
 
     @Override
     public void translate(GeyserSession session, ClientboundForgetLevelChunkPacket packet) {
+        // 区块缓存以 Java 坐标索引，卸载时也用 Java 坐标，不能混用 Bedrock 坐标喵~
         session.getChunkCache().removeChunk(packet.getX(), packet.getZ());
+
+        // 自定义头颅缓存以 Bedrock 坐标索引，比较前先把 Java 区块索引翻译成 Bedrock 区块索引喵~
+        int[] bedrockChunkCoordinates = session.mapChunkCoordinates(packet.getX(), packet.getZ());
+        int bedrockChunkX = bedrockChunkCoordinates[0];
+        int bedrockChunkZ = bedrockChunkCoordinates[1];
 
         // Checks if a skull is in an unloaded chunk then removes it
         List<Vector3i> removedSkulls = new ArrayList<>();
         for (Vector3i position : session.getSkullCache().getSkulls().keySet()) {
-            if ((position.getX() >> 4) == packet.getX() && (position.getZ() >> 4) == packet.getZ()) {
+            if ((position.getX() >> 4) == bedrockChunkX && (position.getZ() >> 4) == bedrockChunkZ) {
                 removedSkulls.add(position);
             }
         }
         removedSkulls.forEach(session.getSkullCache()::removeSkull);
 
-        ChunkUtils.sendEmptyChunk(session, packet.getX(), packet.getZ(), false);
+        // 空区块包发给 Bedrock 客户端，同样要使用 Bedrock 区块索引喵~
+        ChunkUtils.sendEmptyChunk(session, bedrockChunkX, bedrockChunkZ, false);
     }
 }

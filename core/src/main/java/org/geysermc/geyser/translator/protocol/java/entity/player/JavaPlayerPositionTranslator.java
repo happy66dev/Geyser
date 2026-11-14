@@ -68,6 +68,10 @@ public class JavaPlayerPositionTranslator extends PacketTranslator<ClientboundPl
             packet.getRelatives().contains(PositionElement.Y) ? javaEntityPos.getY() : 0,
             packet.getRelatives().contains(PositionElement.Z) ? javaEntityPos.getZ() : 0);
 
+        // 服务端刚发出的这个位置就是玩家的 Java 真实位置，先按阈值判断是否需要重新对齐水平 offset 喵~
+        // 必须放在映射之前执行，这样下面算出的 Bedrock 坐标才是新坐标系下的值喵~
+        session.relocateHorizontallyIfNeeded(javaTeleportPosition.toFloat().toDouble());
+
         // 仅 Bedrock 侧状态、传送包与确认缓存使用映射后的 float 坐标喵~
         Vector3d position = session.mapPositionUnclamped(javaTeleportPosition.toFloat()).toDouble();
 

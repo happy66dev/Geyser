@@ -100,6 +100,8 @@ public class JavaBlockEntityDataTranslator extends PacketTranslator<ClientboundB
 
         // When a Java client is trying to load a structure, it expects the server to send it the size of the structure.
         // On 1.20.4, the server does so here - we can pass that through to Bedrock, so we're properly selecting the area.
+        // 喵~防御：结构方块缓存里存的是 Java 坐标（Bedrock 请求时已反向还原），所以比较也必须用 Java 坐标，
+        // 否则映射开启后永远匹配不上，结构选择框会失效喵~
         if (type == BlockEntityType.STRUCTURE_BLOCK && session.getGameMode() == GameMode.CREATIVE
                 && packet.getPosition().equals(session.getStructureBlockCache().getCurrentStructureBlock())
                 && packet.getNbt() != null && packet.getNbt().size() > 5

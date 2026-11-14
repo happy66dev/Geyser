@@ -45,6 +45,7 @@ import org.geysermc.geyser.api.util.TriState;
 import org.geysermc.geyser.command.defaults.AdvancedTooltipsCommand;
 import org.geysermc.geyser.command.defaults.AdvancementsCommand;
 import org.geysermc.geyser.command.defaults.ConnectionTestCommand;
+import org.geysermc.geyser.command.defaults.CoordinateCommand;
 import org.geysermc.geyser.command.defaults.CustomOptionsCommand;
 import org.geysermc.geyser.command.defaults.DumpCommand;
 import org.geysermc.geyser.command.defaults.ExtensionsCommand;
@@ -176,6 +177,7 @@ public class CommandRegistry implements EventRegistrar {
         registerBuiltInCommand(new QuickActionsCommand("quickactions", "geyser.commands.quickactions.desc", "geyser.command.quickactions"));
         registerBuiltInCommand(new GameruleCommand("gamerules", "geyser.commands.gamerules.desc", "geyser.command.gamerules"));
         registerBuiltInCommand(new NetherNetCommand(geyser, "nethernet", "Shows NetherNet signaling status and diagnostics", "geyser.command.nethernet"));
+        registerBuiltInCommand(new CoordinateCommand("coordinate", "geyser.commands.coordinate.desc", "geyser.command.coordinate"));
 
         if (this.geyser.platformType() == PlatformType.STANDALONE) {
             registerBuiltInCommand(new StopCommand(geyser, "stop", "geyser.commands.stop.desc", "geyser.command.stop"));
