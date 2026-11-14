@@ -137,6 +137,16 @@ public interface GeyserConfig {
     @DefaultNumeric(10000)
     int horizontalMappingTriggerDistance();
 
+    @Comment("""
+        Whether to keep a copy of the raw Java chunk packets so that recently loaded chunks can be
+        replayed to the client when the mapping offset changes. This avoids a briefly overlapping or
+        half-loaded world after a re-center, at the cost of roughly 100 KB of memory per loaded chunk
+        and player. Disable this if you run many players on a memory constrained host; chunks will
+        then only be refilled once the Java server sends them again.
+        Only used when horizontal-coordinate-mapping is enabled.""")
+    @DefaultBoolean(true)
+    boolean horizontalMappingChunkReplay();
+
     @Comment("Do not change!")
     @SuppressWarnings("unused")
     default int configVersion() {

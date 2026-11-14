@@ -40,6 +40,7 @@ import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.level.Clien
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 public class ChunkCache {
     @Getter
@@ -53,8 +54,14 @@ public class ChunkCache {
      * 而 Geyser 内部的方块调色板已经丢失了原始区块数据（光照、生物群系、高度图等），
      * 只有保留 Java 原始包才能完整重放喵~ 代价是每个区块多存一份原始 payload，
      * 但换来的是重定位后世界不会半加载或重叠喵~
+     * <p>
+     * 该缓存受配置项 <code>horizontal-mapping-chunk-replay</code> 控制，默认开启；
+     * 关掉后不再占用内存，但重定位后要等 Java 服务端重新下发区块世界才恢复喵~
      */
     private final Long2ObjectMap<ClientboundLevelChunkWithLightPacket> javaChunkPackets;
+
+    /** 实时读取「是否启用区块重放」配置的函数，保证 /geyser reload 对已登录玩家立刻生效喵~ */
+    private final BooleanSupplier chunkReplaySupplier;
 
     @Setter
     private int minY;
@@ -64,15 +71,36 @@ public class ChunkCache {
     public ChunkCache(GeyserSession session) {
         this.cache = !session.getGeyser().getWorldManager().hasOwnChunkCache(); // To prevent Spigot from initializing
         chunks = cache ? new Long2ObjectOpenHashMap<>() : null;
-        // 原始包缓存只在 Geyser 自己持有区块数据时才需要，Spigot 有自己的实现喵~
+        // 原始包缓存表只在「Geyser 自己持有区块数据」时才建立，Spigot 等自带区块管理的服务端不占这份内存喵~
         javaChunkPackets = cache ? new Long2ObjectOpenHashMap<>() : null;
+        // 存成 Supplier 而不是构造时取一次快照：配置在运行期可以通过 /geyser reload 修改，
+        // 若抓成常量，已登录的玩家必须重连才会生效喵~
+        this.chunkReplaySupplier = () -> session.getGeyser().config().horizontalMappingChunkReplay();
+    }
+
+    /**
+     * 当前是否启用了原始区块包缓存喵~
+     *
+     * @return 启用时为 true；服务器自带区块管理或配置关闭时为 false 喵~
+     */
+    public boolean isChunkReplayEnabled() {
+        // 喵~防御：服务器自带区块管理时根本没有这张表，直接返回 false 喵~
+        if (javaChunkPackets == null) {
+            return false;
+        }
+        // 喵~防御：配置读取可能因重载而短暂异常，异常按「关闭」处理以节省内存喵~
+        try {
+            return chunkReplaySupplier.getAsBoolean();
+        } catch (RuntimeException exception) {
+            return false;
+        }
     }
 
     /**
      * 记录一份 Java 原始区块包，供 offset 切换时重放喵~
      * <p>
      * 输入：Java 坐标系中的区块坐标与原始包；输出：无。
-     * 边界：缓存关闭（服务器自带区块管理）时直接忽略，不做任何存储喵~
+     * 边界：缓存关闭（服务器自带区块管理或配置禁用）时直接忽略，不做任何存储喵~
      *
      * @param chunkX Java 坐标系中的区块 X 索引
      * @param chunkZ Java 坐标系中的区块 Z 索引
@@ -80,7 +108,11 @@ public class ChunkCache {
      */
     public void cacheJavaPacket(int chunkX, int chunkZ, ClientboundLevelChunkWithLightPacket packet) {
         // 喵~防御：缓存关闭或包为空时什么都不做，避免无谓占用内存喵~
-        if (!cache || packet == null || javaChunkPackets == null) {
+        if (javaChunkPackets == null || packet == null) {
+            return;
+        }
+        // 喵~防御：配置禁用重放时也不存，保证关闭后不再增长内存喵~
+        if (!isChunkReplayEnabled()) {
             return;
         }
         javaChunkPackets.put(MathUtils.chunkPositionToLong(chunkX, chunkZ), packet);
@@ -92,8 +124,13 @@ public class ChunkCache {
      * @return 原始包集合的只读快照；缓存关闭时返回空集合喵~
      */
     public Collection<ClientboundLevelChunkWithLightPacket> getJavaChunkPackets() {
-        // 喵~防御：缓存关闭时返回空集合而不是 null，调用方无需判空喵~
+        // 喵~防御：缓存表不存在（服务器自带区块管理）时返回空集合而不是 null，调用方无需判空喵~
         if (javaChunkPackets == null || javaChunkPackets.isEmpty()) {
+            return Collections.emptyList();
+        }
+        // 配置在运行期被关掉时，顺手把已经攒下的包丢掉，避免白白占着内存喵~
+        if (!isChunkReplayEnabled()) {
+            javaChunkPackets.clear();
             return Collections.emptyList();
         }
         return List.copyOf(javaChunkPackets.values());

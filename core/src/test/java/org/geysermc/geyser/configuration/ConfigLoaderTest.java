@@ -202,6 +202,8 @@ public class ConfigLoaderTest {
         // Verify horizontal coordinate mapping settings
         assertTrue(config.horizontalCoordinateMapping());
         assertEquals(5000, config.horizontalMappingTriggerDistance());
+        // 测试配置里显式关掉了原始区块包重放，用来验证开关能被正确读出喵~
+        assertFalse(config.horizontalMappingChunkReplay());
 
         // Verify metrics
         assertFalse(config.enableMetrics());

@@ -230,6 +230,8 @@ public final class HorizontalOffsetRelocator {
      * 正常情况下玩家几分钟甚至几十分钟才会遇到一次，可接受喵~
      * 缓存本身每个区块约多占一份原始 payload（约 100KB 量级），
      * 若服务器自带区块管理（Spigot 等），ChunkCache 会自动关闭缓存、这里也会空转喵~
+     * 若管理员把 <code>horizontal-mapping-chunk-replay</code> 关掉（例如内存紧张的多人大服），
+     * 缓存表不再收包，本方法同样空转，重定位后世界要等 Java 服务端重新下发区块才恢复喵~
      */
     private void replayCachedChunks() {
         // 取一份快照，避免重放过程中区块缓存被并发改动喵~
