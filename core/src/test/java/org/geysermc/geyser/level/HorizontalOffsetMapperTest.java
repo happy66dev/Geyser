@@ -112,14 +112,16 @@ class HorizontalOffsetMapperTest {
 
     @Test
     void largeCoordinateIsCompressedNearOrigin() {
-        // 大坐标映射后必须落在原点附近，否则客户端精度问题根本没解决喵~
+        // 大坐标映射后必须落在可控范围内，否则客户端精度问题根本没解决喵~
         HorizontalOffsetMapper mapper = HorizontalOffsetMapper.create(Vector3d.from(1_000_000, 64, 1_000_000), TRIGGER);
 
         Vector3i mappedPosition = mapper.mapPosition(Vector3i.from(1_000_000, 64, 1_000_000));
 
-        // 压缩目标在 ±100 格内，允许 1 格对齐误差喵~
-        assertTrue(Math.abs(mappedPosition.getX()) <= 116, "映射后 X 仍太远：" + mappedPosition.getX());
-        assertTrue(Math.abs(mappedPosition.getZ()) <= 116, "映射后 Z 仍太远：" + mappedPosition.getZ());
+        // 压缩基值在 ±100 格内，再叠加量化网格 4096，因此结果必须落在这个范围喵~
+        // 该范围下 float32 精度优于 0.001 格，远胜于原始的一百万格喵~
+        int allowedMagnitude = 4096 + 116;
+        assertTrue(Math.abs(mappedPosition.getX()) <= allowedMagnitude, "映射后 X 仍太远：" + mappedPosition.getX());
+        assertTrue(Math.abs(mappedPosition.getZ()) <= allowedMagnitude, "映射后 Z 仍太远：" + mappedPosition.getZ());
     }
 
     @Test
@@ -221,16 +223,18 @@ class HorizontalOffsetMapperTest {
 
     @Test
     void negativeAndPositiveCoordinatesCompressSymmetrically() {
-        // 正负方向的大坐标压缩幅度需要对称，否则偏科会让玩家一侧精度更好喵~
+        // 正负方向的大坐标都要被压回原点附近；量化会让两者落在网格内的不同位置，
+        // 因此这里校验「都足够靠近原点」，而不是要求两边数值几乎相等喵~
         HorizontalOffsetMapper positiveMapper = HorizontalOffsetMapper.create(Vector3d.from(1_000_000, 64, 0), TRIGGER);
         HorizontalOffsetMapper negativeMapper = HorizontalOffsetMapper.create(Vector3d.from(-1_000_000, 64, 0), TRIGGER);
 
         int positiveMapped = positiveMapper.mapPosition(Vector3i.from(1_000_000, 64, 0)).getX();
         int negativeMapped = negativeMapper.mapPosition(Vector3i.from(-1_000_000, 64, 0)).getX();
 
-        // 两者绝对值之差不应超过一个区块（16 格）喵~
-        assertTrue(Math.abs(Math.abs(positiveMapped) - Math.abs(negativeMapped)) <= 16,
-            "正负压缩不对称：" + positiveMapped + " vs " + negativeMapped);
+        // 量化粒度是 4096，压缩基值在 ±100 内，所以映射后应当落在 ±(4096 + 100) 范围内喵~
+        int allowedMagnitude = 4096 + 100;
+        assertTrue(Math.abs(positiveMapped) <= allowedMagnitude, "正向映射后过远：" + positiveMapped);
+        assertTrue(Math.abs(negativeMapped) <= allowedMagnitude, "负向映射后过远：" + negativeMapped);
     }
 
     @ParameterizedTest
@@ -295,9 +299,9 @@ class HorizontalOffsetMapperTest {
 
         // 五百万格在 int 范围内，必须启用映射喵~
         assertTrue(mapper.needsMapping());
-        // 映射后应压到原点附近，保证 float32 精度够用喵~
+        // 映射后应落到量化网格内（粒度 4096 + 压缩基值 100），保证 float32 精度够用喵~
         int mapped = mapper.mapPosition(Vector3i.from(5_000_000, 64, 0)).getX();
-        assertTrue(Math.abs(mapped) <= 10_000, "映射后仍过于远离原点：" + mapped);
+        assertTrue(Math.abs(mapped) <= 4096 + 100, "映射后仍过于远离原点：" + mapped);
     }
 
     @Test

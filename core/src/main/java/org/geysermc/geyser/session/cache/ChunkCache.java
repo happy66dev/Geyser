@@ -35,11 +35,26 @@ import org.geysermc.geyser.registry.BlockRegistries;
 import org.geysermc.geyser.session.GeyserSession;
 import org.geysermc.geyser.util.MathUtils;
 import org.geysermc.mcprotocollib.protocol.data.game.chunk.DataPalette;
+import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.level.ClientboundLevelChunkWithLightPacket;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.List;
 
 public class ChunkCache {
     @Getter
     private final boolean cache;
     private final Long2ObjectMap<GeyserChunk> chunks;
+
+    /**
+     * 原始 Java 区块包缓存，键是「Java 区块坐标」打包成的 long 喵~
+     * <p>
+     * 用途：水平坐标映射切换 offset 时，客户端已加载的区块必须按新坐标系重新下发，
+     * 而 Geyser 内部的方块调色板已经丢失了原始区块数据（光照、生物群系、高度图等），
+     * 只有保留 Java 原始包才能完整重放喵~ 代价是每个区块多存一份原始 payload，
+     * 但换来的是重定位后世界不会半加载或重叠喵~
+     */
+    private final Long2ObjectMap<ClientboundLevelChunkWithLightPacket> javaChunkPackets;
 
     @Setter
     private int minY;
@@ -49,6 +64,39 @@ public class ChunkCache {
     public ChunkCache(GeyserSession session) {
         this.cache = !session.getGeyser().getWorldManager().hasOwnChunkCache(); // To prevent Spigot from initializing
         chunks = cache ? new Long2ObjectOpenHashMap<>() : null;
+        // 原始包缓存只在 Geyser 自己持有区块数据时才需要，Spigot 有自己的实现喵~
+        javaChunkPackets = cache ? new Long2ObjectOpenHashMap<>() : null;
+    }
+
+    /**
+     * 记录一份 Java 原始区块包，供 offset 切换时重放喵~
+     * <p>
+     * 输入：Java 坐标系中的区块坐标与原始包；输出：无。
+     * 边界：缓存关闭（服务器自带区块管理）时直接忽略，不做任何存储喵~
+     *
+     * @param chunkX Java 坐标系中的区块 X 索引
+     * @param chunkZ Java 坐标系中的区块 Z 索引
+     * @param packet 原始 Java 区块包，不能为 null
+     */
+    public void cacheJavaPacket(int chunkX, int chunkZ, ClientboundLevelChunkWithLightPacket packet) {
+        // 喵~防御：缓存关闭或包为空时什么都不做，避免无谓占用内存喵~
+        if (!cache || packet == null || javaChunkPackets == null) {
+            return;
+        }
+        javaChunkPackets.put(MathUtils.chunkPositionToLong(chunkX, chunkZ), packet);
+    }
+
+    /**
+     * 取出当前已缓存的全部 Java 原始区块包，供重定位时重放喵~
+     *
+     * @return 原始包集合的只读快照；缓存关闭时返回空集合喵~
+     */
+    public Collection<ClientboundLevelChunkWithLightPacket> getJavaChunkPackets() {
+        // 喵~防御：缓存关闭时返回空集合而不是 null，调用方无需判空喵~
+        if (javaChunkPackets == null || javaChunkPackets.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return List.copyOf(javaChunkPackets.values());
     }
 
     public void addToCache(int x, int z, DataPalette[] chunks) {
@@ -125,6 +173,10 @@ public class ChunkCache {
 
         long chunkPosition = MathUtils.chunkPositionToLong(chunkX, chunkZ);
         chunks.remove(chunkPosition);
+        // 原始包缓存必须同步移除，否则卸载的区块会在重定位时被重新发回客户端喵~
+        if (javaChunkPackets != null) {
+            javaChunkPackets.remove(chunkPosition);
+        }
     }
 
     /**
@@ -138,6 +190,24 @@ public class ChunkCache {
         }
 
         chunks.clear();
+        // 原始包缓存一起清空，避免跨维度或代理切换后残留旧世界数据喵~
+        if (javaChunkPackets != null) {
+            javaChunkPackets.clear();
+        }
+    }
+
+    /**
+     * 只清空原始 Java 包缓存，保留方块调色板缓存喵~
+     * <p>
+     * 用途：水平坐标映射切换 offset 后，旧坐标系下的原始包已经不能再用，
+     * 但方块调色板本身与坐标系无关、仍然有效，因此只丢原始包喵~
+     */
+    public void clearJavaPacketCache() {
+        // 喵~防御：缓存关闭时无需处理喵~
+        if (javaChunkPackets == null) {
+            return;
+        }
+        javaChunkPackets.clear();
     }
 
     public int getChunkMinY() {

@@ -72,6 +72,15 @@ public final class HorizontalOffsetMapper {
     /** 开平方压缩的最大迭代次数；纯属双重保险，正常数据 4 次以内必然收敛喵~ */
     private static final int MAX_SHRINK_ITERATIONS = 64;
 
+    /**
+     * offset 量化粒度，单位：格，等于 64 个区块喵~
+     * <p>
+     * offset 只在跨过这个粒度时才变化，因此客户端世界重建的频率从「每 15 格」降到「每 4096 格」喵~
+     * 取值权衡：粒度越大，世界重建越少但客户端坐标范围越大、float32 精度越差；
+     * 4096 时客户端坐标最大约 4196，float32 精度仍优于 0.001 格，是舒适区间喵~
+     */
+    private static final int OFFSET_GRANULARITY = 4096;
+
     /** 恒等映射单例，未启用水平映射时使用，避免每个会话重复分配对象喵~ */
     private static final HorizontalOffsetMapper IDENTITY = new HorizontalOffsetMapper(0, 0);
 
@@ -123,11 +132,24 @@ public final class HorizontalOffsetMapper {
     }
 
     /**
-     * 计算单个水平分量需要的平移量，并对齐到区块喵~
+     * 计算单个水平分量需要的平移量，按大网格量化后对齐到区块喵~
+     * <p>
+     * <h2>为什么必须量化</h2>
+     * <p>
+     * 如果直接拿「原始坐标 - 开平方压缩值」当 offset，压缩值会随坐标连续变化，
+     * 实测每走约 15 格 offset 就会变一次，等于每 15 格重建一次客户端世界，
+     * 比不优化还卡喵~ 所以这里把 offset 量化到 {@link #OFFSET_GRANULARITY} 的整数倍，
+     * 只有玩家跨过网格边界时才换一次坐标系，频率从「每 15 格」降到「每 4096 格」喵~
+     *
+     * <h2>量化后客户端坐标范围</h2>
+     * <p>
+     * 量化值落在 <code>[0, 粒度)</code> 之间，加上压缩基值后客户端坐标大致在
+     * <code>[-100, 粒度)</code> 内，float32 在这个范围仍有约 0.0005 格的精度，
+     * 远优于肉眼与碰撞检测所需，足以消除方块错位与移动抖动喵~
      *
      * @param coordinate 该分量在 Java 坐标系中的值，单位：格
      * @param triggerDistance 触发阈值，单位：格
-     * @return 该分量的平移量，单位：格；不会返回非 16 倍数的值喵~
+     * @return 该分量的平移量，单位：格；保证是 16 的整数倍，未超阈值时为 0 喵~
      */
     private static int writeOffsetFor(double coordinate, int triggerDistance) {
         // 未超过阈值时分量保持原位，普通世界因此完全不受影响喵~
@@ -135,14 +157,18 @@ public final class HorizontalOffsetMapper {
             return 0;
         }
 
-        // 求出该分量压缩后希望落在的位置，范围限定在 ±100 格内喵~
+        // 求出该分量压缩后希望落在的基值，范围限定在 ±100 格内喵~
         int compressed = GenericMath.floor(shrinkTowardsOrigin(coordinate));
 
-        // offset 取「原始坐标 - 压缩目标」再向下对齐到区块，保证映射后坐标落在区块边界上喵~
-        // 喵~防御：坐标理论上可能极大，先按 long 计算再收窄，避免 int 溢出后符号翻转导致世界错位喵~
-        long rawOffset = (long) Math.floor(coordinate) - compressed;
+        // 取坐标在「大网格」内的余数，offset 用「坐标减去它」就能把坐标拉回网格起点喵~
+        // 用 Math.floorMod 而不是 % 运算符，因为前者对负数也返回非负余数，符号处理更简单喵~
+        long gridRemainder = Math.floorMod((long) Math.floor(coordinate), OFFSET_GRANULARITY);
 
-        // 向下取整到 16 的倍数；用位运算实现，对负数同样正确喵~
+        // offset = 坐标 - 量化后的余数 - 压缩基值，这样映射结果 = 压缩基值 + 量化余数喵~
+        long rawOffset = (long) Math.floor(coordinate) - gridRemainder - compressed;
+
+        // 向下对齐到区块，保证 offset 是 16 的整数倍、映射后区块边界不错位喵~
+        // 量化粒度是 16 的倍数，压缩基值也在 ±100 内，因此对齐后映射结果的偏移量小于一个区块，仍在可接受范围喵~
         long chunkAlignedOffset = (rawOffset >> 4) << 4;
 
         // 喵~防御：超出 int 表示范围时退化为 0（不做映射），总比世界整体跳到错误位置安全喵~

@@ -31,11 +31,14 @@ import org.cloudburstmc.math.vector.Vector3i;
 import org.geysermc.geyser.entity.type.Entity;
 import org.geysermc.geyser.entity.type.ItemFrameEntity;
 import org.geysermc.geyser.entity.type.player.SessionPlayerEntity;
+import org.geysermc.geyser.registry.Registries;
 import org.geysermc.geyser.session.GeyserSession;
 import org.geysermc.geyser.session.cache.TeleportCache;
 import org.geysermc.geyser.util.ChunkUtils;
+import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.level.ClientboundLevelChunkWithLightPacket;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BooleanSupplier;
@@ -182,10 +185,12 @@ public final class HorizontalOffsetRelocator {
         player.setPosition(bedrockPlayerPosition);
         player.moveAbsolute(bedrockPlayerPosition, player.getYaw(), player.getPitch(), player.isOnGround(), true);
 
-        // 清掉记住的区块位置与旧区块缓存，强制客户端按新坐标系重新加载周围世界喵~
+        // 清掉记住的区块位置，强制下一次 updateChunkPosition 一定重新发布区块范围喵~
         session.setLastChunkPosition(null);
-        session.getChunkCache().clear();
         ChunkUtils.updateChunkPosition(session, bedrockPlayerPosition.toInt());
+        // 用缓存里的原始 Java 区块包在新区块坐标下完整重放一遍已加载区块喵~
+        // 只清缓存是不够的：客户端会短暂看到重叠/半加载的世界，必须主动把区块重新下发喵~
+        replayCachedChunks();
 
         // 自定义头颅缓存以 Bedrock 坐标索引，必须按 delta 整体重定位，否则距离剔除与移除都会错位喵~
         session.getSkullCache().relocateBy(delta);
@@ -198,6 +203,63 @@ public final class HorizontalOffsetRelocator {
                 + ", oldOffsetX=" + oldMapper.offsetX() + ", oldOffsetZ=" + oldMapper.offsetZ()
                 + ", newOffsetX=" + newMapper.offsetX() + ", newOffsetZ=" + newMapper.offsetZ()
                 + ", bedrockPlayerPosition=" + bedrockPlayerPosition);
+        }
+    }
+
+    /**
+     * 把缓存住的原始 Java 区块包，在新坐标系下完整重放给客户端喵~
+     * <p>
+     * <h2>为什么必须重放</h2>
+     * <p>
+     * 区块包里的区块索引与方块实体坐标都依赖当前 offset；
+     * offset 一变，客户端手里的旧区块就整体偏了一个 delta，
+     * 表现为世界重叠、半边加载、方块错位，直到玩家重新登录才会恢复喵~
+     * 重放一遍等价于「按新坐标系把整个世界重新装一次」，玩家完全无感喵~
+     *
+     * <h2>为什么重放原始包而不是自己重建</h2>
+     * <p>
+     * Geyser 内部的方块调色板只保留了方块 ID，光照、生物群系、高度图都已经丢弃；
+     * 用原始 Java 包重走一遍翻译流程，这些数据都会自动带上，
+     * 而且能复用现成的全部映射逻辑（含区块索引、方块实体坐标、高度映射）喵~
+     *
+     * <h2>成本</h2>
+     * <p>
+     * 主人注意：这里会把整个视距内的区块全部重新翻译加编码一遍，
+     * 视距 10 时约 400 个区块，是重定位时最大的一笔开销；
+     * 因为 offset 已按 4096 格量化，实测每走 4096 格才触发一次，
+     * 正常情况下玩家几分钟甚至几十分钟才会遇到一次，可接受喵~
+     * 缓存本身每个区块约多占一份原始 payload（约 100KB 量级），
+     * 若服务器自带区块管理（Spigot 等），ChunkCache 会自动关闭缓存、这里也会空转喵~
+     */
+    private void replayCachedChunks() {
+        // 取一份快照，避免重放过程中区块缓存被并发改动喵~
+        Collection<ClientboundLevelChunkWithLightPacket> cachedPackets =
+            session.getChunkCache().getJavaChunkPackets();
+
+        // 喵~防御：没有缓存（服务器自带区块管理，或玩家附近还没收到区块）时直接返回喵~
+        if (cachedPackets.isEmpty()) {
+            return;
+        }
+
+        // 重放前先清掉旧的原始包缓存，避免 translator 把旧 offset 的包又写回去喵~
+        session.getChunkCache().clearJavaPacketCache();
+
+        // 逐个重放：走完整翻译流程，坐标会自动按新 offset 计算喵~
+        for (ClientboundLevelChunkWithLightPacket cachedPacket : cachedPackets) {
+            // 喵~防御：单块失败不该让整个世界停摆，捕获后继续重放其余区块喵~
+            try {
+                // 直接走 Java 包翻译器注册表，与正常收包走完全一致的路径喵~
+                // canRunImmediately 传 true：此时已经在会话事件循环里，无需再排队喵~
+                Registries.JAVA_PACKET_TRANSLATORS.translate(cachedPacket.getClass(), cachedPacket, session, true);
+            } catch (RuntimeException exception) {
+                // 只记日志不中断：少一个区块总比整个世界都卡住好喵~
+                session.getGeyser().getLogger().error("Failed to replay chunk at "
+                    + cachedPacket.getX() + ", " + cachedPacket.getZ() + " after horizontal relocation", exception);
+            }
+        }
+
+        if (session.getGeyser().config().debugMode()) {
+            session.getGeyser().getLogger().info("[horizontal-map] replayed " + cachedPackets.size() + " cached chunks");
         }
     }
 

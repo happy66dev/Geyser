@@ -309,6 +309,9 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
 
             if (!session.getErosionHandler().isActive()) {
                 session.getChunkCache().addToCache(packet.getX(), packet.getZ(), javaChunks);
+                // 记录原始 Java 包：水平坐标映射切换 offset 时，需要用它在新区块坐标下完整重放这个区块喵~
+                // 内部的方块调色板已经丢掉了光照、生物群系与高度图，只有原始包才能原样重放喵~
+                session.getChunkCache().cacheJavaPacket(packet.getX(), packet.getZ(), packet);
             }
 
             // 这两行原本在这里重新计算，现在改为复用上方已经减去水平 offset 的变量，避免重复平移喵~
