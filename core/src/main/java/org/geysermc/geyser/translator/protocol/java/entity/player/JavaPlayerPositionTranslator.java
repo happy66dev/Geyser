@@ -31,6 +31,7 @@ import org.cloudburstmc.protocol.bedrock.packet.ChunkRadiusUpdatedPacket;
 import org.cloudburstmc.protocol.bedrock.packet.MovePlayerPacket;
 import org.cloudburstmc.protocol.bedrock.packet.RespawnPacket;
 import org.cloudburstmc.protocol.bedrock.packet.SetEntityMotionPacket;
+import org.geysermc.geyser.GeyserImpl;
 import org.geysermc.geyser.entity.type.player.SessionPlayerEntity;
 import org.geysermc.geyser.session.GeyserSession;
 import org.geysermc.geyser.session.cache.TeleportCache;
@@ -41,7 +42,6 @@ import org.geysermc.geyser.util.MathUtils;
 import org.geysermc.mcprotocollib.protocol.data.game.entity.player.PositionElement;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.entity.player.ClientboundPlayerPositionPacket;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.level.ServerboundAcceptTeleportationPacket;
-import org.geysermc.mcprotocollib.protocol.packet.ingame.serverbound.player.ServerboundMovePlayerPosRotPacket;
 
 @Translator(packet = ClientboundPlayerPositionPacket.class)
 public class JavaPlayerPositionTranslator extends PacketTranslator<ClientboundPlayerPositionPacket> {
@@ -56,6 +56,8 @@ public class JavaPlayerPositionTranslator extends PacketTranslator<ClientboundPl
         if (entity.getVehicle() != null) { // Vanilla behaviour, the player ignores teleport if they're on a vehicle.
             // 玩家实体存储 Bedrock 坐标；回传 Java 服务端前必须反向映射喵~
             acceptTeleport(session, session.inverseMapPosition(entity.position()).toDouble(), entity.getJavaYaw(), entity.getPitch(), packet.getId());
+            // 载具状态下忽略传送，同时清空床位交互预期，避免后续床位判定误判喵~
+            entity.setPendingBedInteraction(null);
             return;
         }
 
@@ -74,7 +76,12 @@ public class JavaPlayerPositionTranslator extends PacketTranslator<ClientboundPl
 
         final int teleportId = packet.getId();
 
-        acceptTeleport(session, javaTeleportPosition, newYaw, newPitch, teleportId);
+        // acceptTeleport should only be called at the end of all translation handling (incl. bed, spawn, and regular teleport handling)
+        // granted, vehicle handling calls it immediately as the teleport is ignored, so it can safely confirm
+        // We shouldn't accept the teleport immediately (the method call was originally here) as we need the packets to be sent in order
+        // teleport packet -> ping packet -> reply = client processed teleport (same logic as Java clients)
+        // for beds specifically, the Bedrock client doesn't care and has handled it, so we don't translate it, but the backend still expects a response
+        // so we call acceptTeleport there as well
 
         if (!session.isSpawned()) {
             entity.setPosition(position.toFloat());
@@ -123,11 +130,15 @@ public class JavaPlayerPositionTranslator extends PacketTranslator<ClientboundPl
             if (session.getGeyser().config().debugMode()) {
                 session.getGeyser().getLogger().debug("Spawned player at " + packet.getPosition());
             }
+            entity.setPendingBedInteraction(null);
+            // 确认包回传 Java 服务端坐标，不是映射后的 Bedrock 坐标喵~
+            acceptTeleport(session, javaTeleportPosition, newYaw, newPitch, teleportId);
             return;
         }
 
         Vector3f lastPlayerPosition = entity.position();
         session.getGeyser().getLogger().debug("Teleport (" + teleportId + ") from " + lastPlayerPosition);
+
         float lastPlayerPitch = entity.getPitch();
         float lastPlayerYaw = entity.getYaw();
         Vector3f teleportDestination = position.toFloat();
@@ -140,6 +151,20 @@ public class JavaPlayerPositionTranslator extends PacketTranslator<ClientboundPl
 
         if (packet.getRelatives().contains(PositionElement.ROTATE_DELTA)) {
             deltaMovement = MathUtils.xYRot(deltaMovement, (float) Math.toRadians(lastPlayerPitch - newPitch), (float) Math.toRadians(lastPlayerYaw - newYaw));
+        }
+
+        SessionPlayerEntity.PendingBedInteraction pendingBedInteraction = entity.getPendingBedInteraction();
+        if (pendingBedInteraction != null) {
+            // See the Javadocs over at SessionPlayerEntity#pendingBedInteraction - we need to silently ignore a teleport if it just teleports us to the bed
+
+            entity.setPendingBedInteraction(null);
+            // 床位预期坐标来源于 Bedrock 客户端方块包，属于 Bedrock 坐标系，因此用 position 比对喵~
+            if (looksLikeBedTeleport(pendingBedInteraction, position, deltaMovement)) {
+                GeyserImpl.getInstance().getLogger().debug("Not translating teleport because it is to a pending bed interaction");
+                // 确认包必须回传 Java 服务端坐标，不能用上面的 Bedrock 坐标喵~
+                acceptTeleport(session, javaTeleportPosition, newYaw, newPitch, teleportId);
+                return;
+            }
         }
 
         TeleportCache.TeleportType type = (deltaMovement.distanceSquared(Vector3f.ZERO) > 1.0E-8F) ?
@@ -165,14 +190,33 @@ public class JavaPlayerPositionTranslator extends PacketTranslator<ClientboundPl
         }
 
         session.getGeyser().getLogger().debug("to " + entity.position());
+        // 普通传送同样回传 Java 服务端坐标，确保确认包里的位置与服务端记录一致喵~
+        acceptTeleport(session, javaTeleportPosition, newYaw, newPitch, teleportId);
     }
 
+    /**
+     * Confirm the teleport to the backend only when Bedrock has answered a latency ping.
+     * (see the comment in {@link #translate} for where this should be called)
+     * <p>
+     * Previously, teleports were acknowledged instantly (without a latency stack packet), but this behavior broke in 26.x where the confirmation packet
+     * now includes a position:
+     * <a href="https://src.papermc.io/1/26.3/net/minecraft/server/network/ServerGamePacketListenerImpl#L586">{@code ServerGamePacketListenerImpl#handleAcceptTeleportPacket}</a>
+     * calls <a href="https://src.papermc.io/1/26.3/net/minecraft/server/network/ServerGamePacketListenerImpl#L1129">{@code #handlePlayerPositionChange}</a>, which
+     * checks the position relative to the player's position at the start of the tick...
+     * For a player sleeping in a bed (>1 block from that tick position), the backend tries to teleport the player back to the bed (see {@code #isSleeping} in that method).
+     * <p>
+     * from there, it's an evil cycle of Geyser instantly confirming the teleport, the server having a tantrum and teleporting, yada yada until the end of the server tick (#6775).
+     */
     private void acceptTeleport(GeyserSession session, Vector3d position, float yaw, float pitch, int id) {
-        // Confirm the teleport when we receive it to match Java edition
-        ServerboundAcceptTeleportationPacket teleportConfirmPacket = new ServerboundAcceptTeleportationPacket(id);
-        session.sendDownstreamGamePacket(teleportConfirmPacket);
-        // Java 服务端要求精确的原始 double 坐标；这里不能经历 float 映射往返喵~
-        ServerboundMovePlayerPosRotPacket positionPacket = new ServerboundMovePlayerPosRotPacket(false, false, position.getX(), position.getY(), position.getZ(), yaw, pitch);
-        session.sendDownstreamGamePacket(positionPacket);
+        // 上游 26.x 起确认包自带坐标，必须传 Java 服务端的原始 double 坐标，不能传映射后的 Bedrock 坐标喵~
+        ServerboundAcceptTeleportationPacket teleportConfirmPacket = new ServerboundAcceptTeleportationPacket(id, position.getX(), position.getY(), position.getZ(), yaw, pitch);
+        // 等 Bedrock 回应延迟探测后再确认，避免床位传送陷入服务端反复回拉的死循环喵~
+        session.sendNetworkLatencyStackPacket(id, true, () -> session.sendDownstreamGamePacket(teleportConfirmPacket));
+    }
+
+    private static boolean looksLikeBedTeleport(SessionPlayerEntity.PendingBedInteraction pendingInteraction, Vector3d packetPosition, Vector3f deltaMovement) {
+        // Teleports to a bed after a bed interaction always teleports to the centre of the bed (plus some Y offset), with a delta movement of 0 (as of Java 26.3)
+        // 调用方传入的 packetPosition 必须与 PendingBedInteraction 同属 Bedrock 坐标系喵~
+        return pendingInteraction.expectedTeleportPosition().equals(packetPosition) && deltaMovement.length() == 0.0;
     }
 }

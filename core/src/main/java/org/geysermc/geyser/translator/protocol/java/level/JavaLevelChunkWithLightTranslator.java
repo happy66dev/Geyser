@@ -50,7 +50,7 @@ import org.geysermc.geyser.level.chunk.bitarray.BitArrayVersion;
 import org.geysermc.geyser.level.chunk.bitarray.SingletonBitArray;
 import org.geysermc.geyser.registry.BlockRegistries;
 import org.geysermc.geyser.session.GeyserSession;
-import org.geysermc.geyser.session.cache.registry.JavaRegistries;
+import org.geysermc.geyser.registry.java.JavaRegistries;
 import org.geysermc.geyser.translator.level.BiomeTranslator;
 import org.geysermc.geyser.translator.level.block.entity.BedrockChunkWantsBlockEntityTag;
 import org.geysermc.geyser.translator.level.block.entity.BlockEntityTranslator;
@@ -131,7 +131,8 @@ public class JavaLevelChunkWithLightTranslator extends PacketTranslator<Clientbo
             long javaDataReadStartNanos = timingDiagnostics.enabled() ? System.nanoTime() : 0L;
             for (int sectionY = 0; sectionY < chunkSize; sectionY++) {
                 ChunkSection javaSection = MinecraftTypes.readChunkSection(in, BlockRegistries.BLOCK_STATES.get().size(),
-                    session.getRegistryCache().registry(JavaRegistries.BIOME).size());
+                    session.javaRegistries().registry(JavaRegistries.BIOME).size());
+                // 记录读取 Java 原始区块数据所花的时间，仅诊断开启时才会计时喵~
                 if (timingDiagnostics.enabled()) {
                     timingDiagnostics.record(TimingDiagnostics.Metric.CHUNK_JAVA_DATA_READ,
                         System.nanoTime() - javaDataReadStartNanos);

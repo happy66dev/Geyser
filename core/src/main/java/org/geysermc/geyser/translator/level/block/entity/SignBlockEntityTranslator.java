@@ -27,7 +27,6 @@ package org.geysermc.geyser.translator.level.block.entity;
 
 import org.cloudburstmc.nbt.NbtMap;
 import org.cloudburstmc.nbt.NbtMapBuilder;
-import org.cloudburstmc.nbt.NbtType;
 import org.geysermc.geyser.level.block.type.BlockState;
 import org.geysermc.geyser.session.GeyserSession;
 import org.geysermc.geyser.text.ChatColor;
@@ -84,43 +83,42 @@ public class SignBlockEntityTranslator extends BlockEntityTranslator {
         NbtMapBuilder builder = NbtMap.builder();
 
         StringBuilder signText = new StringBuilder();
-        List<?> rawMessages = javaNbt.getList("messages", NbtType.COMPOUND);
-        if (rawMessages.isEmpty()) {
-            rawMessages = javaNbt.getList("messages", NbtType.STRING);
-        }
-        List<String> messages = MessageTranslator.signTextFromNbtTag(session, rawMessages);
-        if (!messages.isEmpty()) {
-            var it = messages.iterator();
-            while (it.hasNext()) {
-                String signLine = it.next();
+        Object rawMessages = javaNbt.get("messages"); // Should always be a list of components
+        if (rawMessages != null) {
+            List<String> messages = MessageTranslator.signTextFromNbtTag(session, rawMessages);
+            if (!messages.isEmpty()) {
+                var it = messages.iterator();
+                while (it.hasNext()) {
+                    String signLine = it.next();
 
-                // Check the character width on the sign to ensure there is no overflow that is usually hidden
-                // to Java Edition clients but will appear to Bedrock clients
-                int signWidth = 0;
-                StringBuilder finalSignLine = new StringBuilder();
-                boolean previousCharacterWasFormatting = false; // Color changes do not count for maximum width
-                for (char c : signLine.toCharArray()) {
-                    if (c == ChatColor.ESCAPE) {
-                        // Don't count this character
-                        previousCharacterWasFormatting = true;
-                    } else if (previousCharacterWasFormatting) {
-                        // Don't count this character either
-                        previousCharacterWasFormatting = false;
-                    } else {
-                        signWidth += SignUtils.getCharacterWidth(c);
+                    // Check the character width on the sign to ensure there is no overflow that is usually hidden
+                    // to Java Edition clients but will appear to Bedrock clients
+                    int signWidth = 0;
+                    StringBuilder finalSignLine = new StringBuilder();
+                    boolean previousCharacterWasFormatting = false; // Color changes do not count for maximum width
+                    for (char c : signLine.toCharArray()) {
+                        if (c == ChatColor.ESCAPE) {
+                            // Don't count this character
+                            previousCharacterWasFormatting = true;
+                        } else if (previousCharacterWasFormatting) {
+                            // Don't count this character either
+                            previousCharacterWasFormatting = false;
+                        } else {
+                            signWidth += SignUtils.getCharacterWidth(c);
+                        }
+
+                        if (signWidth < signWidthMax()) {
+                            finalSignLine.append(c);
+                        } else {
+                            // Adding the character would make Bedrock move to the next line - Java doesn't do that, so we do not want to
+                            break;
+                        }
                     }
 
-                    if (signWidth < signWidthMax()) {
-                        finalSignLine.append(c);
-                    } else {
-                        // Adding the character would make Bedrock move to the next line - Java doesn't do that, so we do not want to
-                        break;
+                    signText.append(finalSignLine);
+                    if (it.hasNext()) {
+                        signText.append("\n");
                     }
-                }
-
-                signText.append(finalSignLine);
-                if (it.hasNext()) {
-                    signText.append("\n");
                 }
             }
         }

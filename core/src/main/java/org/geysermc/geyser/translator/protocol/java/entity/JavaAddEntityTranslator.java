@@ -34,7 +34,6 @@ import org.geysermc.geyser.entity.type.FallingBlockEntity;
 import org.geysermc.geyser.entity.type.FishingHookEntity;
 import org.geysermc.geyser.entity.type.HangingEntity;
 import org.geysermc.geyser.entity.type.player.PlayerEntity;
-import org.geysermc.geyser.registry.Registries;
 import org.geysermc.geyser.session.GeyserSession;
 import org.geysermc.geyser.skin.SkinManager;
 import org.geysermc.geyser.text.GeyserLocale;
@@ -49,6 +48,8 @@ import org.geysermc.mcprotocollib.protocol.data.game.entity.object.WardenData;
 import org.geysermc.mcprotocollib.protocol.data.game.entity.type.EntityType;
 import org.geysermc.mcprotocollib.protocol.packet.ingame.clientbound.entity.ClientboundAddEntityPacket;
 
+import java.util.Optional;
+
 @Translator(packet = ClientboundAddEntityPacket.class)
 public class JavaAddEntityTranslator extends PacketTranslator<ClientboundAddEntityPacket> {
 
@@ -62,8 +63,8 @@ public class JavaAddEntityTranslator extends PacketTranslator<ClientboundAddEnti
             return;
         }
 
-        EntityTypeDefinition<?> definition = Registries.JAVA_ENTITY_TYPES.get(type);
-        if (definition == null) {
+        Optional<EntityTypeDefinition<?>> definition = type.definition();
+        if (definition.isEmpty()) {
             session.getGeyser().getLogger().debug("Could not find an entity definition for add entity packet " + packet);
             return;
         }
@@ -74,7 +75,7 @@ public class JavaAddEntityTranslator extends PacketTranslator<ClientboundAddEnti
         }
 
         // 实体生成上下文，内部已对 Y 轴做 offset 映射喵~
-        EntitySpawnContext context = EntitySpawnContext.fromPacket(session, definition, packet);
+        EntitySpawnContext context = EntitySpawnContext.fromPacket(session, definition.get(), packet);
         if (type.is(EntityType.PLAYER)) {
             PlayerEntity entity;
             if (packet.getUuid().equals(session.getPlayerEntity().uuid())) {
@@ -126,7 +127,7 @@ public class JavaAddEntityTranslator extends PacketTranslator<ClientboundAddEnti
                 return;
             }
         } else {
-            entity = definition.factory().create(context);
+            entity = definition.get().factory().create(context);
 
             // This is done over entity metadata in modern versions, but is still sent over network in the spawn packet
             if (entity instanceof HangingEntity hanging) {

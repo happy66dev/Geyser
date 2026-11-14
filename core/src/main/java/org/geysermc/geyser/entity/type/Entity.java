@@ -67,6 +67,7 @@ import org.geysermc.geyser.level.physics.BoundingBox;
 import org.geysermc.geyser.scoreboard.Team;
 import org.geysermc.geyser.session.GeyserSession;
 import org.geysermc.geyser.translator.text.MessageTranslator;
+import org.geysermc.geyser.util.ChunkUtils;
 import org.geysermc.geyser.util.EntityUtils;
 import org.geysermc.geyser.util.InteractionResult;
 import org.geysermc.geyser.util.InteractiveTag;
@@ -99,7 +100,8 @@ public class Entity implements GeyserEntity {
 
     protected int entityId;
     @Accessors(fluent = true)
-    protected final long geyserId;
+    @Setter(AccessLevel.NONE)
+    protected long geyserId;
     @Accessors(fluent = true)
     protected UUID uuid;
     /**
@@ -230,7 +232,7 @@ public class Entity implements GeyserEntity {
         addEntityPacket.setIdentifier(bedrockDefinition.identifier().toString());
         addEntityPacket.setRuntimeEntityId(geyserId);
         addEntityPacket.setUniqueEntityId(geyserId);
-        addEntityPacket.setPosition(bedrockPosition());
+        addEntityPacket.setPosition(spawnPosition(bedrockPosition()));
         addEntityPacket.setMotion(motion);
         addEntityPacket.setRotation(Vector2f.from(pitch, yaw));
         addEntityPacket.setHeadRotation(headYaw);
@@ -261,6 +263,60 @@ public class Entity implements GeyserEntity {
     }
 
     /**
+     * The position to use in the entity spawn packet. Bedrock discards an actor added far outside the area
+     * it has loaded and no later movement brings it back, while Java's entity tracker can legitimately
+     * pair an entity at an outdated position and correct it right afterwards (e.g. a player
+     * teleporting into view). This mainly occurs on Vanilla / Fabric, and can be replicated inconsistently by a 
+     * player teleporting to another player over a large distance. 
+     * The first correction or movement fixes the position, and prevents despawn. An entity that never moves again is corrected by the
+     * position sync Java forces once its tracker reaches 400 ticks, except for the few types that
+     * are tracked on a very long interval.
+     */
+    protected Vector3f spawnPosition(Vector3f packetPosition) {
+        int radius = ChunkUtils.squareToCircle(session.getServerRenderDistance());
+        if (session.getClientRenderDistance() > 0) {
+            radius = Math.min(radius, session.getClientRenderDistance());
+        }
+        if (!session.isSpawned() || radius < 2) {
+            return packetPosition;
+        }
+
+        Vector3f playerPosition = session.getPlayerEntity().position();
+        float dx = packetPosition.getX() - playerPosition.getX();
+        float dz = packetPosition.getZ() - playerPosition.getZ();
+        float limit = radius << 4;
+        float distanceSquared = dx * dx + dz * dz;
+        if (distanceSquared <= limit * limit) {
+            return packetPosition;
+        }
+
+        // A chunk inside the edge, along the real direction, so it lands in terrain the client has
+        float scale = (limit - 16) / (float) Math.sqrt(distanceSquared);
+        return Vector3f.from(playerPosition.getX() + dx * scale, packetPosition.getY(), playerPosition.getZ() + dz * scale);
+    }
+
+    /**
+     * Clears this entity's vehicle.
+     */
+    public void stopRiding(Entity previousVehicle) {
+        setVehicle(null);
+
+        // stopRiding gets called on the entity leaving the vehicle and not the rider
+        // current scenario is a happy ghast dismounting a minecart (e.g. on broken cart or dismount or activator rail),
+        // while being ridden by a player. When the PLAYER dismounts, stopRiding is called on the player.. which isn't a ClientVehicle
+        // java backends only send rotation data for passengers (excluding pos), so Geyser would just store the pos
+        // of the entity before it started riding... (for all but client authoritative entities this is ok).
+        // For client vehicles (assuming the player is still riding it), geyser simulates the entity but ignores server
+        // position updates... consequently initial movement packets would come from that old previous position,
+        // ... et voila! "moved too quickly" in the logs.
+        // Simple fix here, move the vehicle to the previous vehicle pos and it's fine
+        if (this instanceof ClientVehicle clientVehicle && clientVehicle.shouldSimulateMovement()) {
+            setPosition(previousVehicle.position());
+            clientVehicle.getVehicleComponent().moveAbsolute(previousVehicle.position().toDouble());
+        }
+    }
+
+    /**
      * Despawns the entity
      */
     public void despawnEntity() {
@@ -268,7 +324,7 @@ public class Entity implements GeyserEntity {
 
         for (Entity passenger : passengers) { // Make sure all passengers on the despawned entity are updated
             if (passenger == null) continue;
-            passenger.setVehicle(null);
+            passenger.stopRiding(this);
             passenger.setFlag(EntityFlag.RIDING, false);
             passenger.updateBedrockMetadata();
 
@@ -342,6 +398,8 @@ public class Entity implements GeyserEntity {
                 moveEntityPacket.setHeadYaw(headYaw);
                 moveEntityPacket.getFlags().add(MoveEntityDeltaPacket.Flag.HAS_HEAD_YAW);
             }
+            // Since 26.40 the ground state is its own field instead of that flag
+            moveEntityPacket.setOnGround(isOnGround);
             if (isOnGround) {
                 moveEntityPacket.getFlags().add(MoveEntityDeltaPacket.Flag.ON_GROUND);
             }
@@ -561,7 +619,7 @@ public class Entity implements GeyserEntity {
         // CustomName is ignored for players, and is always their username.
         Optional<Component> name = entityMetadata.getValue();
         if (name.isPresent()) {
-            this.customName = MessageTranslator.convertMessage(name.get(), session.locale());
+            this.customName = MessageTranslator.convertMessageRaw(name.get(), session.locale());
             setNametag(customName, true);
             return;
         }
