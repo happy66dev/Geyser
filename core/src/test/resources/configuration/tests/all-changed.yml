@@ -113,6 +113,16 @@ debug-mode: true
 # Whether performance timing and memory diagnostics should be collected independently from debug-mode
 debug-timing: true
 
+# Enable horizontal coordinate mapping so Bedrock clients stay near the origin at large coordinates.
+# Bedrock stores positions as 32-bit floats, so blocks misalign and movement stutters far from spawn.
+# When enabled, players beyond the trigger distance are shifted by a chunk-aligned offset while the
+# Java server keeps receiving and sending real coordinates.
+horizontal-coordinate-mapping: true
+
+# Distance in blocks at which horizontal coordinate mapping re-centers a player.
+# Only used when horizontal-coordinate-mapping is enabled.
+horizontal-mapping-trigger-distance: 5000
+
 # Allow a fake cooldown indicator to be sent. Bedrock players otherwise do not see a cooldown as they still use 1.8 combat.
 # Please note: if the cooldown is enabled, some users may see a black box during the cooldown sequence, like below:
 # https://cdn.discordapp.com/attachments/613170125696270357/957075682230419466/Screenshot_from_2022-03-25_20-35-08.png

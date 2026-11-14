@@ -123,6 +123,20 @@ public interface GeyserConfig {
     @DefaultBoolean(false)
     boolean debugTiming();
 
+    @Comment("""
+        Enable horizontal coordinate mapping so Bedrock clients stay near the origin at large coordinates.
+        Bedrock stores positions as 32-bit floats, so blocks misalign and movement stutters far from spawn.
+        When enabled, players beyond the trigger distance are shifted by a chunk-aligned offset while the
+        Java server keeps receiving and sending real coordinates.""")
+    @DefaultBoolean(false)
+    boolean horizontalCoordinateMapping();
+
+    @Comment("""
+        Distance in blocks at which horizontal coordinate mapping re-centers a player.
+        Only used when horizontal-coordinate-mapping is enabled.""")
+    @DefaultNumeric(10000)
+    int horizontalMappingTriggerDistance();
+
     @Comment("Do not change!")
     @SuppressWarnings("unused")
     default int configVersion() {

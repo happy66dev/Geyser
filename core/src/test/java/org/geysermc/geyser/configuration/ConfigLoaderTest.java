@@ -199,6 +199,10 @@ public class ConfigLoaderTest {
         assertTrue(config.debugMode());
         assertTrue(config.debugTiming());
 
+        // Verify horizontal coordinate mapping settings
+        assertTrue(config.horizontalCoordinateMapping());
+        assertEquals(5000, config.horizontalMappingTriggerDistance());
+
         // Verify metrics
         assertFalse(config.enableMetrics());
         assertEquals(new UUID(0, 0), config.metricsUuid());
