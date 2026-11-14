@@ -3075,7 +3075,7 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource, Jav
      * <p>
      * 由移动处理器在每次移动后调用；开关关闭时立即返回，开销只有一次布尔判断喵~
      *
-     * <h2>为什么需要节流</h2>
+     * <b>为什么需要节流</b>
      * <p>
      * Bedrock 客户端移动时每秒可能发几十个 PlayerAuthInput，若每次都推一个动作栏包，
      * 既刷屏玩家又白白占用事件循环与带宽喵~ 因此这里按毫秒做最小间隔限制，
